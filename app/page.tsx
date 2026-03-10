@@ -4,6 +4,7 @@
  * To test: run `npm run dev` and visit http://localhost:3000 — should see CyberShield branding.
  */
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { Footer } from '@/components/ui/Footer';
 import { Header } from '@/components/ui/Header';
@@ -44,6 +45,39 @@ const FEATURES = [
     title: 'Teacher Studio',
     description:
       'Teachers create custom modules and quizzes, track class analytics, and identify weak areas.',
+  },
+];
+
+const BADGES = [
+  {
+    key: 'first_mission',
+    name: 'First Mission',
+    icon: '/assets/badge-first-mission.svg',
+    how: 'Complete your first quiz session',
+  },
+  {
+    key: 'perfect_strike',
+    name: 'Perfect Strike',
+    icon: '/assets/badge-perfect-strike.svg',
+    how: 'Earn a Gold medal on any quiz',
+  },
+  {
+    key: 'hot_streak',
+    name: 'Hot Streak',
+    icon: '/assets/badge-hot-streak.svg',
+    how: 'Get a streak of 5+ correct answers',
+  },
+  {
+    key: 'veteran_operator',
+    name: 'Veteran Operator',
+    icon: '/assets/badge-veteran-operator.svg',
+    how: 'Complete 10 or more quiz sessions',
+  },
+  {
+    key: 'flawless',
+    name: 'Flawless',
+    icon: '/assets/badge-flawless.svg',
+    how: 'Finish a quiz with 100% accuracy',
   },
 ];
 
@@ -158,6 +192,44 @@ export default function LandingPage() {
                   <p className="text-xs text-gray-300 font-medium">{rank.name}</p>
                 </div>
               ))}
+            </div>
+
+            {/* ── Achievement Badges ─────────────────────────────────────────── */}
+            <div className="mt-14">
+              <div className="flex items-center gap-3 justify-center mb-1">
+                <span className="h-px flex-1 max-w-[80px] bg-white/5" />
+                <h3 className="text-lg font-bold text-white">Achievement Badges</h3>
+                <span className="h-px flex-1 max-w-[80px] bg-white/5" />
+              </div>
+              <p className="text-xs text-gray-500 mb-8">
+                Earn these by hitting milestones during your quiz sessions
+              </p>
+
+              <div className="flex flex-wrap justify-center gap-4">
+                {BADGES.map((badge) => (
+                  <div
+                    key={badge.key}
+                    className="group flex flex-col items-center gap-2 rounded-xl border border-white/5 hover:border-cyan-500/25 bg-gray-900/40 hover:bg-gray-900/70 px-5 py-4 w-36 transition-all"
+                  >
+                    <div className="relative">
+                      <div className="absolute inset-0 rounded-full blur-md bg-cyan-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <Image
+                        src={badge.icon}
+                        alt={badge.name}
+                        width={56}
+                        height={56}
+                        className="relative drop-shadow-[0_0_6px_rgba(0,212,255,0.25)] group-hover:drop-shadow-[0_0_12px_rgba(0,212,255,0.4)] transition-all"
+                      />
+                    </div>
+                    <p className="text-xs font-semibold text-white text-center leading-tight">
+                      {badge.name}
+                    </p>
+                    <p className="text-[10px] text-gray-500 text-center leading-relaxed">
+                      {badge.how}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>

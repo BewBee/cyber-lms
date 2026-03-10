@@ -39,7 +39,9 @@
       "Bash(curl -s --max-time 5 \"http://localhost:3000/api/student/modules?studentId=00000000-0000-0000-0000-000000000004\")",
       "Bash(curl -s --max-time 5 \"http://localhost:3000/api/student/modules?studentId=c66fecdb-3ccc-49f0-a3ba-6ff15fb3d176\")",
       "Bash(curl -s --max-time 8 -X POST \"http://localhost:3000/api/dev/ensure-users\" -H \"Content-Type: application/json\")",
-      "Bash(npx next build)"
+      "Bash(npx next build)",
+      "Bash(xargs grep -l \"badge\\\\|Badge\")",
+      "Bash(xargs grep -l \"badges\\\\|student_badges\")"
     ]
   }
 }
