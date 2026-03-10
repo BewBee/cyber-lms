@@ -15,10 +15,18 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
+// Use placeholder fallbacks so createClient never throws at module load time
+// (e.g. during Vercel build-time static analysis when env vars aren't injected yet).
+// Actual DB calls will still fail at runtime if real env vars are missing.
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (
+  supabaseUrl === 'https://placeholder.supabase.co' ||
+  supabaseAnonKey === 'placeholder-anon-key'
+) {
   if (typeof window !== 'undefined') {
     console.warn(
       '[CyberShield] Supabase env vars not set. DB features disabled. ' +
