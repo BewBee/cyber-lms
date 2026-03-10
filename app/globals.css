@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+/* ─── CyberShield Theme Variables ─────────────────────────────────────────────
+   Tailwind v4 uses @theme for custom design tokens.
+   These become utility classes: bg-cyber-green, text-cyber-cyan, etc.
+*/
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-cyber-green:  #00ff88;
+  --color-cyber-cyan:   #00d4ff;
+  --color-cyber-dark:   #0a0f1a;
+  --color-cyber-darker: #060b14;
+  --color-cyber-card:   #0d1520;
+  --color-cyber-border: #1a2d45;
+  --color-cyber-gold:   #ffd700;
+  --color-cyber-silver: #c0c0c0;
+  --color-cyber-bronze: #cd7f32;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* ─── Base ─────────────────────────────────────────────────────────────────── */
+:root {
+  --background: #0a0f1a;
+  --foreground: #e2e8f0;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  min-height: 100dvh;
+  /* Subtle grid overlay — cyberpunk aesthetic, degrades gracefully */
+  background-image:
+    linear-gradient(rgba(0,212,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.018) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+/* ─── Accessibility ───────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #00d4ff;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Scrollbar (WebKit) ──────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0a0f1a; }
+::-webkit-scrollbar-thumb { background: #1a2d45; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,212,255,0.3); }
+
+/* ─── Neon text utilities ─────────────────────────────────────────────────── */
+.text-neon-cyan {
+  color: #00d4ff;
+  text-shadow: 0 0 8px rgba(0,212,255,0.5), 0 0 20px rgba(0,212,255,0.25);
+}
+.text-neon-green {
+  color: #00ff88;
+  text-shadow: 0 0 8px rgba(0,255,136,0.5), 0 0 20px rgba(0,255,136,0.25);
+}
+
+/* ─── Reduced-motion override ─────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Low-end device class fallbacks ─────────────────────────────────────── */
+.perf-low .backdrop-blur-sm,
+.perf-low .backdrop-blur-md {
+  backdrop-filter: none !important;
+}

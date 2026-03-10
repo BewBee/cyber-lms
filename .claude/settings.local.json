@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell.exe -Command '[System.Environment]::SetEnvironmentVariable\\(\"\"PATH\"\", \"\"C:\\\\Program Files\\\\nodejs;\"\" + [System.Environment]::GetEnvironmentVariable\\(\"\"PATH\"\", \"\"Process\"\"\\), \"\"Process\"\"\\); Set-Location C:\\\\Users\\\\USER\\\\cyber-lms; & \"\"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\"\" install canvas-confetti \"\"@types/canvas-confetti\"\" vitest')",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(powershell.exe -Command \"Get-Command node | Select-Object -ExpandProperty Source\")",
+      "Bash(curl -s http://localhost:3000/api/health)",
+      "Bash(curl -s http://localhost:3000/api/quizzes)",
+      "Bash(curl -s http://localhost:3000/api/leaderboard)",
+      "Bash(node -e \":*)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(cmd /c \"taskkill /F /IM node.exe\")",
+      "Bash(cmd /c \"taskkill /F /IM node.exe 2>&1\")",
+      "Bash(cmd /c \"netstat -ano | findstr :3000\")",
+      "Bash(cmd /c \"del /F /Q C:\\\\Users\\\\USER\\\\cyber-lms\\\\.next\\\\dev\\\\lock 2>&1 && echo deleted\")",
+      "Bash(cmd /c \"if exist C:\\\\Users\\\\USER\\\\cyber-lms\\\\.next\\\\dev\\\\lock \\(echo exists\\) else \\(echo not found\\)\")",
+      "Bash(curl -s \"http://localhost:3000/api/teacher/assignments?teacherId=00000000-0000-0000-0000-000000000002\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/teacher/assignments -H \"Content-Type: application/json\" -d '{\"\"module_id\"\":\"\"20000000-0000-0000-0000-000000000002\"\",\"\"title\"\":\"\"Cryptography Lab Report\"\",\"\"instructions\"\":\"\"Research and write a 2-page report on RSA encryption. Submit a Google Doc link.\"\",\"\"created_by\"\":\"\"00000000-0000-0000-0000-000000000002\"\"}')",
+      "Bash(cmd /c \"npx tsc --noEmit 2>&1\")",
+      "Bash(node --version)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\USER\\\\cyber-lms\\\\app\\\\login\")",
+      "Bash(Out-Null)"
+    ]
+  }
+}
