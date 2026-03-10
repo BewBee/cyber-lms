@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- Hot Streak — flame, orange accent -->
+  <circle cx="24" cy="24" r="22" stroke="#f97316" stroke-width="2" fill="#0a0f1a"/>
+  <!-- Glow halo -->
+  <circle cx="24" cy="32" r="10" fill="#f97316" opacity="0.12"/>
+  <!-- Outer flame -->
+  <path d="M24 8 C24 8 34 16 34 26 C34 34 30 38 26 40 C28 36 26 32 24 30 C22 32 20 36 22 40 C18 38 14 34 14 26 C14 16 24 8 24 8Z" fill="#f97316" opacity="0.9"/>
+  <!-- Inner flame highlight -->
+  <path d="M24 20 C24 20 29 24 29 30 C29 34 27 36 26 38 C27 35 25 32 24 32 C23 32 21 35 22 38 C21 36 19 34 19 30 C19 24 24 20 24 20Z" fill="#fed7aa" opacity="0.75"/>
+</svg>

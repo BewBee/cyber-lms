@@ -19,10 +19,15 @@ import { ModuleEditor } from '@/components/teacher/ModuleEditor';
 import { AssignmentManager } from '@/components/teacher/AssignmentManager';
 import type { User, Module, Class, ModuleFormData, OptionKey } from '@/types';
 
+interface ClassWithCount extends Class {
+  student_count: number;
+}
+
 interface TeacherData {
   teacher: User;
   modules: Module[];
-  classes: Class[];
+  classes: ClassWithCount[];
+  totalQuestions: number;
 }
 
 
@@ -37,6 +42,18 @@ export default function TeacherDashboard() {
   const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
   const [editingModuleData, setEditingModuleData] = useState<ModuleFormData | null>(null);
   const [editLoadingId, setEditLoadingId] = useState<string | null>(null);
+
+  // Class management state
+  const [newClassName, setNewClassName] = useState('');
+  const [creatingClass, setCreatingClass] = useState(false);
+  const [classError, setClassError] = useState<string | null>(null);
+  const [deletingClassId, setDeletingClassId] = useState<string | null>(null);
+
+  // Class-module assignment state
+  const [managingClassId, setManagingClassId] = useState<string | null>(null);
+  const [classModulesMap, setClassModulesMap] = useState<Record<string, Module[]>>({});
+  const [moduleMgmtLoading, setModuleMgmtLoading] = useState(false);
+  const [addModuleSelections, setAddModuleSelections] = useState<Record<string, string>>({});
 
   const loadData = async () => {
     try {
@@ -58,20 +75,115 @@ export default function TeacherDashboard() {
         .eq('created_by', teacher.id)
         .order('created_at', { ascending: false });
 
-      const { data: classes } = await supabase
-        .from('classes')
-        .select('class_id, class_name, teacher_id, created_at')
-        .eq('teacher_id', teacher.id);
+      // Count total questions across all teacher modules
+      const moduleIds = (modules ?? []).map((m) => m.module_id);
+      let totalQuestions = 0;
+      if (moduleIds.length > 0) {
+        const { count } = await supabase
+          .from('questions')
+          .select('*', { count: 'exact', head: true })
+          .in('module_id', moduleIds);
+        totalQuestions = count ?? 0;
+      }
+
+      // Use API to get classes with student_count
+      const classRes = await fetch(`/api/classes?teacherId=${teacher.id}`);
+      const classJson = classRes.ok ? await classRes.json() : { classes: [] };
 
       setData({
         teacher,
         modules: (modules ?? []) as Module[],
-        classes: (classes ?? []) as Class[],
+        classes: (classJson.classes ?? []) as ClassWithCount[],
+        totalQuestions,
       });
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateClass = async () => {
+    if (!data?.teacher.id || !newClassName.trim()) return;
+    setCreatingClass(true);
+    setClassError(null);
+    try {
+      const res = await fetch('/api/classes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teacherId: data.teacher.id, class_name: newClassName.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setClassError(json.error ?? 'Failed to create class'); return; }
+      setNewClassName('');
+      await loadData();
+    } catch {
+      setClassError('Network error');
+    } finally {
+      setCreatingClass(false);
+    }
+  };
+
+  const handleDeleteClass = async (classId: string) => {
+    if (!data?.teacher.id) return;
+    if (!confirm('Delete this class? Students will lose their enrollment.')) return;
+    setDeletingClassId(classId);
+    try {
+      const res = await fetch(`/api/classes?classId=${classId}&teacherId=${data.teacher.id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) { await loadData(); }
+    } finally {
+      setDeletingClassId(null);
+    }
+  };
+
+  const handleOpenModuleMgmt = async (classId: string) => {
+    if (managingClassId === classId) { setManagingClassId(null); return; }
+    setManagingClassId(classId);
+    // Only fetch if not already cached
+    if (classModulesMap[classId] !== undefined) return;
+    setModuleMgmtLoading(true);
+    try {
+      const res = await fetch(`/api/classes/${classId}/modules?teacherId=${data?.teacher.id}`);
+      if (res.ok) {
+        const { modules: clsMods } = await res.json();
+        setClassModulesMap((prev) => ({ ...prev, [classId]: clsMods ?? [] }));
+      }
+    } finally {
+      setModuleMgmtLoading(false);
+    }
+  };
+
+  const handleAssignModule = async (classId: string) => {
+    if (!data?.teacher.id) return;
+    const moduleId = addModuleSelections[classId];
+    if (!moduleId) return;
+    const res = await fetch(`/api/classes/${classId}/modules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teacherId: data.teacher.id, moduleId }),
+    });
+    if (res.ok) {
+      const assignedMod = data.modules.find((m) => m.module_id === moduleId);
+      if (assignedMod) {
+        setClassModulesMap((prev) => ({ ...prev, [classId]: [...(prev[classId] ?? []), assignedMod] }));
+        setAddModuleSelections((prev) => ({ ...prev, [classId]: '' }));
+      }
+    }
+  };
+
+  const handleUnassignModule = async (classId: string, moduleId: string) => {
+    if (!data?.teacher.id) return;
+    const res = await fetch(
+      `/api/classes/${classId}/modules?teacherId=${data.teacher.id}&moduleId=${moduleId}`,
+      { method: 'DELETE' }
+    );
+    if (res.ok) {
+      setClassModulesMap((prev) => ({
+        ...prev,
+        [classId]: (prev[classId] ?? []).filter((m) => m.module_id !== moduleId),
+      }));
     }
   };
 
@@ -158,18 +270,23 @@ export default function TeacherDashboard() {
     );
   }
 
-  const { teacher, modules, classes } = data;
+  const { teacher, modules, classes, totalQuestions } = data;
 
   return (
     <div className="flex flex-col min-h-screen">
       <Header userRole="teacher" userName={teacher.name} onSignOut={handleSignOut} />
 
       <main className="flex-1 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 space-y-8">
-        {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-4">
+        {/* Hero header */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-gray-900 via-gray-900 to-indigo-950/30 p-6 flex items-center justify-between flex-wrap gap-4"
+        >
           <div>
-            <h1 className="text-2xl font-bold text-white">Teacher Dashboard</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Welcome, {teacher.name}</p>
+            <p className="text-xs font-mono text-indigo-400 uppercase tracking-widest mb-1">Instructor</p>
+            <h1 className="text-2xl font-bold text-white">Welcome back, {teacher.name.split(' ')[0]}</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{modules.length} module{modules.length !== 1 ? 's' : ''} · {classes.length} class{classes.length !== 1 ? 'es' : ''} · {totalQuestions} question{totalQuestions !== 1 ? 's' : ''}</p>
           </div>
           <Button
             onClick={() => {
@@ -180,7 +297,7 @@ export default function TeacherDashboard() {
           >
             {showEditor ? '✕ Cancel' : '+ New Module'}
           </Button>
-        </div>
+        </motion.div>
 
         {/* Create Module Panel */}
         <AnimatePresence>
@@ -207,13 +324,13 @@ export default function TeacherDashboard() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {[
-            { label: 'My Modules', value: modules.length, icon: '📚' },
-            { label: 'My Classes', value: classes.length, icon: '🏫' },
-            { label: 'Questions', value: '—', icon: '❓' },
-          ].map(({ label, value, icon }) => (
-            <div key={label} className="rounded-xl border border-white/5 bg-gray-900/40 p-4 text-center">
+            { label: 'My Modules',  value: modules.length,  icon: '📚', color: 'text-indigo-400', border: 'border-indigo-500/20', bg: 'bg-indigo-500/5' },
+            { label: 'My Classes',  value: classes.length,  icon: '🏫', color: 'text-cyan-400',   border: 'border-cyan-500/20',   bg: 'bg-cyan-500/5'   },
+            { label: 'Questions',   value: totalQuestions,  icon: '❓', color: 'text-amber-400',  border: 'border-amber-500/20',  bg: 'bg-amber-500/5'  },
+          ].map(({ label, value, icon, color, border, bg }) => (
+            <div key={label} className={`rounded-xl border ${border} ${bg} p-4 text-center`}>
               <p className="text-xl mb-1" aria-hidden="true">{icon}</p>
-              <p className="text-2xl font-bold text-white">{value}</p>
+              <p className={`text-2xl font-bold ${color}`}>{value}</p>
               <p className="text-xs text-gray-500">{label}</p>
             </div>
           ))}
@@ -298,20 +415,131 @@ export default function TeacherDashboard() {
 
         {/* Classes & Analytics */}
         <section aria-labelledby="classes-heading">
-          <h2 id="classes-heading" className="text-sm font-semibold text-white mb-3">My Classes</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 id="classes-heading" className="text-sm font-semibold text-white">My Classes</h2>
+          </div>
+
+          {/* Create Class Form */}
+          <div className="flex items-center gap-2 mb-4">
+            <input
+              type="text"
+              value={newClassName}
+              onChange={(e) => setNewClassName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleCreateClass(); }}
+              placeholder="New class name…"
+              maxLength={80}
+              className="flex-1 rounded-lg bg-gray-800 border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-cyan-500 placeholder-gray-600"
+            />
+            <Button
+              size="sm"
+              onClick={handleCreateClass}
+              loading={creatingClass}
+              disabled={!newClassName.trim()}
+            >
+              + Create Class
+            </Button>
+          </div>
+          {classError && <p className="text-xs text-red-400 mb-3">{classError}</p>}
+
           {classes.length === 0 ? (
-            <p className="text-sm text-gray-600">No classes found.</p>
+            <p className="text-sm text-gray-600">No classes yet. Create one above so students can enroll.</p>
           ) : (
             <div className="space-y-3">
               {classes.map((cls) => (
                 <Card key={cls.class_id} title={cls.class_name} action={
-                  <Button size="sm" variant="secondary" onClick={() => loadAnalytics(cls.class_id)} loading={analyticsLoading}>
-                    View Analytics
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 flex-shrink-0">
+                      {cls.student_count} student{cls.student_count !== 1 ? 's' : ''}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleOpenModuleMgmt(cls.class_id)}
+                    >
+                      {managingClassId === cls.class_id ? 'Hide Modules' : 'Modules'}
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => loadAnalytics(cls.class_id)} loading={analyticsLoading}>
+                      Analytics
+                    </Button>
+                    <button
+                      onClick={() => handleDeleteClass(cls.class_id)}
+                      disabled={deletingClassId === cls.class_id}
+                      className="text-xs text-gray-600 hover:text-red-400 transition-colors px-2 py-1 disabled:opacity-50"
+                      aria-label={`Delete class ${cls.class_name}`}
+                    >
+                      {deletingClassId === cls.class_id ? '…' : '✕'}
+                    </button>
+                  </div>
                 }>
                   <p className="text-xs text-gray-600">
                     Created {new Date(cls.created_at).toLocaleDateString()}
                   </p>
+
+                  {/* Module assignment panel */}
+                  {managingClassId === cls.class_id && (
+                    <div className="mt-3 pt-3 border-t border-white/5">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                        Assigned Modules
+                      </p>
+                      {moduleMgmtLoading ? (
+                        <p className="text-xs text-gray-600">Loading…</p>
+                      ) : (classModulesMap[cls.class_id] ?? []).length === 0 ? (
+                        <p className="text-xs text-gray-600 mb-3">No modules assigned yet.</p>
+                      ) : (
+                        <div className="space-y-1 mb-3">
+                          {(classModulesMap[cls.class_id] ?? []).map((mod) => (
+                            <div
+                              key={mod.module_id}
+                              className="flex items-center justify-between gap-2 rounded-lg bg-gray-800/60 px-3 py-1.5"
+                            >
+                              <span className="text-xs text-gray-300 truncate">{mod.module_name}</span>
+                              <button
+                                onClick={() => handleUnassignModule(cls.class_id, mod.module_id)}
+                                className="text-xs text-gray-600 hover:text-red-400 transition-colors flex-shrink-0"
+                                title="Remove from class"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Add module selector */}
+                      {(() => {
+                        const assignedIds = new Set((classModulesMap[cls.class_id] ?? []).map((m) => m.module_id));
+                        const unassigned = modules.filter((m) => !assignedIds.has(m.module_id));
+                        if (unassigned.length === 0) {
+                          return (
+                            <p className="text-xs text-gray-600">All your modules are assigned to this class.</p>
+                          );
+                        }
+                        return (
+                          <div className="flex items-center gap-2 mt-1">
+                            <select
+                              value={addModuleSelections[cls.class_id] ?? ''}
+                              onChange={(e) =>
+                                setAddModuleSelections((prev) => ({ ...prev, [cls.class_id]: e.target.value }))
+                              }
+                              className="flex-1 text-xs rounded-lg bg-gray-800 border border-white/10 text-white px-2 py-1.5 focus:outline-none focus:border-cyan-500"
+                            >
+                              <option value="">Select module…</option>
+                              {unassigned.map((m) => (
+                                <option key={m.module_id} value={m.module_id}>{m.module_name}</option>
+                              ))}
+                            </select>
+                            <Button
+                              size="sm"
+                              disabled={!addModuleSelections[cls.class_id]}
+                              onClick={() => handleAssignModule(cls.class_id)}
+                            >
+                              + Assign
+                            </Button>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </Card>
               ))}
             </div>

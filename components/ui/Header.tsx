@@ -1,6 +1,8 @@
 /**
  * components/ui/Header.tsx — Global navigation header for CyberShield LMS.
  * Displays branding, nav links, and user info based on the active role.
+ * Role is resolved from props when provided; otherwise falls back to the
+ * current Supabase session so public pages never show wrong role links.
  * ARIA: nav landmark with aria-label; active links marked with aria-current.
  * To test: render with role="student" and verify correct nav links appear.
  */
@@ -9,7 +11,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { browserSupabase as supabase } from '@/lib/browserClient';
 import type { UserRole } from '@/types';
 
 interface NavLink {
@@ -22,7 +25,7 @@ const NAV_LINKS: NavLink[] = [
   { href: '/student/dashboard', label: 'Dashboard', roles: ['student'] },
   { href: '/leaderboard', label: 'Leaderboard', roles: ['student', 'teacher', 'admin'] },
   { href: '/teacher/dashboard', label: 'My Modules', roles: ['teacher'] },
-  { href: '/teacher/dashboard', label: 'Admin Panel', roles: ['admin'] },
+  { href: '/admin/dashboard',   label: 'Admin Panel', roles: ['admin'] },
 ];
 
 interface HeaderProps {
@@ -31,11 +34,35 @@ interface HeaderProps {
   onSignOut?: () => void;
 }
 
-export function Header({ userRole, userName, onSignOut }: HeaderProps) {
+export function Header({ userRole: roleProp, userName, onSignOut }: HeaderProps) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [resolvedRole, setResolvedRole] = useState<UserRole | undefined>(roleProp);
 
-  const visibleLinks = NAV_LINKS.filter((l) => !userRole || l.roles.includes(userRole));
+  // When no role prop is given, read the active session so public pages
+  // (leaderboard, home, etc.) never accidentally show wrong role-specific links.
+  useEffect(() => {
+    if (roleProp) {
+      setResolvedRole(roleProp);
+      return;
+    }
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setResolvedRole(undefined); return; }
+      const { data } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      if (data?.role) setResolvedRole(data.role as UserRole);
+    })();
+  }, [roleProp]);
+
+  // Only show links whose roles include the resolved role.
+  // When role is still unknown (loading / logged-out), show nothing role-specific.
+  const visibleLinks = resolvedRole
+    ? NAV_LINKS.filter((l) => l.roles.includes(resolvedRole))
+    : [];
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/5 bg-gray-950/90 backdrop-blur-md">

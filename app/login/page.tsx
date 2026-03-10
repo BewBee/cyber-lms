@@ -16,12 +16,19 @@ import { browserSupabase as supabase } from '@/lib/browserClient';
 import { Button } from '@/components/ui/Button';
 import { Footer } from '@/components/ui/Footer';
 
+const DEV_CREDENTIALS: Record<string, { email: string; redirect: string }> = {
+  admin:   { email: 'dev-admin@cybershield.dev',   redirect: '/admin/dashboard'   },
+  teacher: { email: 'dev-teacher@cybershield.dev', redirect: '/teacher/dashboard' },
+  student: { email: 'dev-student@cybershield.dev', redirect: '/student/dashboard' },
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [devLoading, setDevLoading] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +70,27 @@ export default function LoginPage() {
     }
   };
 
+
+  const handleDevLogin = async (role: string) => {
+    setDevLoading(role);
+    setErrorMsg(null);
+    try {
+      // Ensure dev accounts exist (idempotent — fast no-op after first call)
+      await fetch('/api/dev/ensure-users', { method: 'POST' });
+
+      const cred = DEV_CREDENTIALS[role];
+      const { error } = await supabase.auth.signInWithPassword({
+        email: cred.email,
+        password: 'CyberDev@1',
+      });
+      if (error) throw new Error(error.message);
+      router.push(cred.redirect);
+    } catch (e) {
+      setErrorMsg(String((e as Error).message));
+    } finally {
+      setDevLoading(null);
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -139,6 +167,25 @@ export default function LoginPage() {
               </p>
             </form>
 
+            {/* Dev quick login — only visible in development */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="pt-4 border-t border-white/8">
+                <p className="text-xs text-gray-600 text-center mb-2">⚡ Dev Quick Login</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['admin', 'teacher', 'student'] as const).map((role) => (
+                    <button
+                      key={role}
+                      type="button"
+                      onClick={() => handleDevLogin(role)}
+                      disabled={devLoading !== null}
+                      className="rounded-lg border border-white/10 bg-gray-800 text-xs text-gray-300 py-2 px-2 capitalize hover:border-cyan-500/50 hover:text-white transition-colors disabled:opacity-50"
+                    >
+                      {devLoading === role ? '…' : role}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <p className="text-center text-xs text-gray-500 mt-4">

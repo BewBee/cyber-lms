@@ -35,9 +35,14 @@ interface AvailableClass {
   teacher_name: string;
 }
 
+interface StudentModule extends Module {
+  class_id: string | null;
+  class_name: string | null;
+}
+
 interface DashboardData {
   user: User;
-  modules: Module[];
+  modules: StudentModule[];
   badges: Badge[];
   recentSessions: GameSession[];
 }
@@ -79,12 +84,9 @@ export default function StudentDashboard() {
 
         const user: User = userData;
 
-        // Fetch modules
-        const { data: modules } = await supabase
-          .from('modules')
-          .select('module_id, module_name, description, module_type, is_locked, exp_bonus_percent')
-          .eq('is_locked', false)
-          .order('created_at');
+        // Fetch modules filtered by class enrollment via API
+        const modulesRes = await fetch(`/api/student/modules?studentId=${userId}`);
+        const modulesJson = modulesRes.ok ? await modulesRes.json() : { modules: [] };
 
         // Fetch badges
         const { data: studentBadges } = await supabase
@@ -105,7 +107,7 @@ export default function StudentDashboard() {
           .order('finished_at', { ascending: false })
           .limit(5);
 
-        const resolvedModules = (modules ?? []) as Module[];
+        const resolvedModules = (modulesJson.modules ?? []) as StudentModule[];
 
         // Fetch enrolled classes
         const enrollRes = await fetch(`/api/enrollments?studentId=${userId}`);
@@ -154,6 +156,11 @@ export default function StudentDashboard() {
   const { user, modules, badges, recentSessions } = data;
   const rankName = calculateRank(user.level);
 
+  // Build class_id → teacher_name lookup from already-loaded enrolledClasses
+  const classTeacherMap = new Map<string, string>(
+    enrolledClasses.map((c) => [c.class_id, c.teacher_name])
+  );
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     window.location.href = '/login';
@@ -164,7 +171,7 @@ export default function StudentDashboard() {
     if (!res.ok) return;
     const { classes } = await res.json();
     // Filter out already-enrolled classes
-    const enrolledIds = new Set(enrolledClasses.map((e) => e.class_id));
+    const enrolledIds = new Set(enrolledClasses.filter((e) => e.status !== 'dropped').map((e) => e.class_id));
     setAvailableClasses((classes ?? []).filter((c: AvailableClass) => !enrolledIds.has(c.class_id)));
     setShowClassBrowser(true);
   };
@@ -207,7 +214,7 @@ export default function StudentDashboard() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-white/8 bg-gray-900/60 p-6"
+          className="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-gray-900 via-gray-900 to-cyan-950/25 p-6"
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div>
@@ -229,14 +236,14 @@ export default function StudentDashboard() {
         {/* ─── Stats row ─────────────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: 'Level', value: user.level, icon: '⚡' },
-            { label: 'Badges', value: badges.length, icon: '🎖️' },
-            { label: 'Sessions', value: recentSessions.length, icon: '🎮' },
-            { label: 'Modules', value: modules.length, icon: '📚' },
-          ].map(({ label, value, icon }) => (
-            <div key={label} className="rounded-xl border border-white/5 bg-gray-900/40 p-4 text-center">
+            { label: 'Level',    value: user.level,            icon: '⚡', color: 'text-cyan-400',   border: 'border-cyan-500/20',   bg: 'bg-cyan-500/5'   },
+            { label: 'Badges',   value: badges.length,         icon: '🎖️', color: 'text-amber-400',  border: 'border-amber-500/20',  bg: 'bg-amber-500/5'  },
+            { label: 'Sessions', value: recentSessions.length, icon: '🎮', color: 'text-purple-400', border: 'border-purple-500/20', bg: 'bg-purple-500/5' },
+            { label: 'Modules',  value: modules.length,        icon: '📚', color: 'text-green-400',  border: 'border-green-500/20',  bg: 'bg-green-500/5'  },
+          ].map(({ label, value, icon, color, border, bg }) => (
+            <div key={label} className={`rounded-xl border ${border} ${bg} p-4 text-center`}>
               <p className="text-xl mb-1" aria-hidden="true">{icon}</p>
-              <p className="text-xl font-bold text-white">{value}</p>
+              <p className={`text-xl font-bold ${color}`}>{value}</p>
               <p className="text-xs text-gray-500">{label}</p>
             </div>
           ))}
@@ -248,7 +255,9 @@ export default function StudentDashboard() {
             Available Modules
           </h2>
           {modules.length === 0 ? (
-            <p className="text-sm text-gray-600">No modules available yet.</p>
+            <p className="text-sm text-gray-600">
+              No modules available yet. Join a class below to unlock your teacher&apos;s modules.
+            </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {modules.map((mod) => (
@@ -267,10 +276,22 @@ export default function StudentDashboard() {
                         {mod.description && (
                           <p className="text-xs text-gray-500 mt-1 line-clamp-2">{mod.description}</p>
                         )}
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className="text-xs font-mono text-gray-600 uppercase">
-                            {mod.module_type}
-                          </span>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          {mod.module_type === 'core' ? (
+                            <span className="text-xs font-mono text-cyan-700 bg-cyan-500/10 rounded px-1.5 py-0.5 uppercase">core</span>
+                          ) : (
+                            <span className="text-xs font-mono text-indigo-500 bg-indigo-500/10 rounded px-1.5 py-0.5 uppercase">teacher</span>
+                          )}
+                          {mod.class_name && (
+                            <span className="text-xs text-gray-500 bg-white/5 rounded px-1.5 py-0.5 truncate max-w-[140px]">
+                              {mod.class_name}
+                            </span>
+                          )}
+                          {mod.class_id && classTeacherMap.has(mod.class_id) && (
+                            <span className="text-xs text-gray-600">
+                              by {classTeacherMap.get(mod.class_id)}
+                            </span>
+                          )}
                           {mod.exp_bonus_percent > 0 && (
                             <span className="text-xs text-green-400 font-semibold">
                               +{mod.exp_bonus_percent}% EXP

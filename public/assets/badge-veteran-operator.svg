@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- Veteran Operator — shield with star, indigo accent -->
+  <circle cx="24" cy="24" r="22" stroke="#6366f1" stroke-width="2" fill="#0a0f1a"/>
+  <!-- Shield body -->
+  <path d="M24 9 L37 14 L37 27 C37 35 24 42 24 42 C24 42 11 35 11 27 L11 14 Z" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5"/>
+  <!-- Shield inner bevel -->
+  <path d="M24 12 L34 16.5 L34 27 C34 33 24 39 24 39 C24 39 14 33 14 27 L14 16.5 Z" fill="none" stroke="#818cf8" stroke-width="0.75" opacity="0.5"/>
+  <!-- Star -->
+  <polygon points="24,18 25.8,23.5 31.5,23.5 26.9,26.9 28.6,32.4 24,29 19.4,32.4 21.1,26.9 16.5,23.5 22.2,23.5" fill="#6366f1" opacity="0.95"/>
+</svg>

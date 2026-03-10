@@ -24,7 +24,22 @@
       "Bash(npm run build)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(''next:'', d.get\\(''dependencies'',{}\\).get\\(''next'',''not found''\\)\\)\")",
       "Bash(node -e \"const p=require\\(''./package.json''\\); console.log\\(''next:'', p.dependencies?.next\\); console.log\\(''engines:'', JSON.stringify\\(p.engines\\)\\)\")",
-      "Bash(ls *.ts *.js)"
+      "Bash(ls *.ts *.js)",
+      "Bash(npx kill-port 3000)",
+      "Bash(npx kill-port 50394)",
+      "mcp__bab49ee4-9b5e-463e-825a-3babf0d3a6b2__list_projects",
+      "mcp__bab49ee4-9b5e-463e-825a-3babf0d3a6b2__apply_migration",
+      "Bash(curl -s http://localhost:53266/api/health)",
+      "Bash(netstat -ano)",
+      "Bash(curl -s \"http://localhost:3000/api/student/modules?studentId=invalid\")",
+      "Bash(curl -s \"http://localhost:3000/api/classes/invalid-id/modules?teacherId=x\")",
+      "mcp__bab49ee4-9b5e-463e-825a-3babf0d3a6b2__execute_sql",
+      "Bash(curl -s \"http://localhost:50522/api/student/modules?studentId=00000000-0000-0000-0000-000000000003\")",
+      "Bash(curl -s --max-time 5 \"http://localhost:3000/api/student/modules?studentId=00000000-0000-0000-0000-000000000003\")",
+      "Bash(curl -s --max-time 5 \"http://localhost:3000/api/student/modules?studentId=00000000-0000-0000-0000-000000000004\")",
+      "Bash(curl -s --max-time 5 \"http://localhost:3000/api/student/modules?studentId=c66fecdb-3ccc-49f0-a3ba-6ff15fb3d176\")",
+      "Bash(curl -s --max-time 8 -X POST \"http://localhost:3000/api/dev/ensure-users\" -H \"Content-Type: application/json\")",
+      "Bash(npx next build)"
     ]
   }
 }
