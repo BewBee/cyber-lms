@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabaseClient';
+import { browserSupabase as supabase } from '@/lib/browserClient';
 import { Header } from '@/components/ui/Header';
 import { Footer } from '@/components/ui/Footer';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
