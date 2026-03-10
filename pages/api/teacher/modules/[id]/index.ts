@@ -27,18 +27,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         questions (
           question_id, question_text, difficulty, explanation, created_at,
           question_options ( option_id, option_key, option_text, is_correct )
-        )
+        ),
+        lessons ( lesson_id, lesson_title, content )
       `)
       .eq('module_id', moduleId)
       .single();
 
     if (modErr || !module) return err(res, 'Module not found', 404);
-    return res.status(200).json({ module });
+
+    // Flatten lesson: return the first lesson (if any) as a single object for the editor
+    const lessons = Array.isArray((module as Record<string, unknown>).lessons)
+      ? (module as Record<string, unknown>).lessons as { lesson_id: string; lesson_title: string; content: string }[]
+      : [];
+    const lesson = lessons[0] ?? null;
+
+    return res.status(200).json({ module: { ...module, lesson, lessons: undefined } });
   }
 
   // ─── PUT: Update teacher module ─────────────────────────────────────────────
   if (req.method === 'PUT') {
-    const { teacherId, module_name, description, exp_bonus_percent, questions } = req.body ?? {};
+    const { teacherId, module_name, description, exp_bonus_percent, lesson, questions } = req.body ?? {};
 
     if (!isValidUUID(teacherId)) return err(res, 'Invalid teacherId', 400);
 
@@ -156,6 +164,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               is_correct: Boolean(o.is_correct),
             }))
           );
+        }
+      }
+    }
+
+    // ── Upsert lesson if provided ───────────────────────────────────────────
+    if (lesson && typeof lesson === 'object') {
+      const lessonTitle = (lesson as Record<string, unknown>).lesson_title;
+      const lessonContent = (lesson as Record<string, unknown>).content;
+      if (lessonTitle || lessonContent) {
+        // Check if a lesson already exists for this module
+        const { data: existingLesson } = await supabase
+          .from('lessons')
+          .select('lesson_id')
+          .eq('module_id', moduleId)
+          .limit(1)
+          .single();
+
+        if (existingLesson) {
+          await supabase
+            .from('lessons')
+            .update({
+              lesson_title: String(lessonTitle ?? '').trim() || null,
+              content: String(lessonContent ?? '').trim() || null,
+            })
+            .eq('lesson_id', existingLesson.lesson_id);
+        } else {
+          await supabase.from('lessons').insert({
+            module_id: moduleId,
+            lesson_title: String(lessonTitle ?? '').trim() || null,
+            content: String(lessonContent ?? '').trim() || null,
+          });
         }
       }
     }

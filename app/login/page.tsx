@@ -54,7 +54,7 @@ export default function LoginPage() {
       const role = userData.role as string;
       if (role === 'student') router.push('/student/dashboard');
       else if (role === 'teacher') router.push('/teacher/dashboard');
-      else if (role === 'admin') router.push('/teacher/dashboard');
+      else if (role === 'admin') router.push('/admin/dashboard');
       else router.push('/');
     } catch (e) {
       setErrorMsg(String((e as Error).message));
@@ -128,6 +128,15 @@ export default function LoginPage() {
               <Button type="submit" loading={loading} fullWidth size="lg">
                 Sign in
               </Button>
+
+              <p className="text-center">
+                <Link
+                  href="/forgot-password"
+                  className="text-xs text-gray-600 hover:text-cyan-400 transition-colors"
+                >
+                  Forgot your password?
+                </Link>
+              </p>
             </form>
 
           </div>

@@ -102,6 +102,9 @@ export default function TeacherDashboard() {
         module_name: module.module_name,
         description: module.description ?? '',
         exp_bonus_percent: module.exp_bonus_percent,
+        lesson: module.lesson
+          ? { lesson_title: module.lesson.lesson_title ?? '', content: module.lesson.content ?? '' }
+          : undefined,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         questions: (module.questions ?? []).map((q: any) => ({
           question_id: q.question_id,

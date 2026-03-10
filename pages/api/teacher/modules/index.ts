@@ -44,12 +44,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // ─── POST: Create teacher module with questions ─────────────────────────────
   if (req.method === 'POST') {
-    const { teacherId, module_name, description, course_id, exp_bonus_percent, questions } = req.body ?? {} as {
+    const { teacherId, module_name, description, course_id, exp_bonus_percent, lesson, questions } = req.body ?? {} as {
       teacherId: unknown;
       module_name: unknown;
       description?: unknown;
       course_id?: unknown;
       exp_bonus_percent?: unknown;
+      lesson?: { lesson_title?: string; content?: string };
       questions: QuestionFormData[];
     };
 
@@ -118,6 +119,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         is_correct: Boolean(o.is_correct),
       }));
       await supabase.from('question_options').insert(optionRows);
+    }
+
+    // Insert lesson if provided
+    if (lesson && (lesson.lesson_title?.trim() || lesson.content?.trim())) {
+      await supabase.from('lessons').insert({
+        module_id: moduleId,
+        lesson_title: lesson.lesson_title?.trim() || null,
+        content: lesson.content?.trim() || null,
+      });
     }
 
     return res.status(201).json({ module_id: moduleId, message: 'Module created successfully' });

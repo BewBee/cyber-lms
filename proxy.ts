@@ -9,7 +9,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // We need to mutate the response to allow Supabase to refresh the session cookie
   let supabaseResponse = NextResponse.next({ request });
 
@@ -53,6 +53,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Protect student and teacher routes; leave everything else public
-  matcher: ['/student/:path*', '/teacher/:path*'],
+  // Protect student, teacher, and admin routes; leave everything else public
+  matcher: ['/student/:path*', '/teacher/:path*', '/admin/:path*'],
 };

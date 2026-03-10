@@ -266,10 +266,17 @@ export interface QuestionFormData {
   }[];
 }
 
+export interface LessonFormData {
+  lesson_title?: string;
+  content?: string;
+}
+
 export interface ModuleFormData {
   module_name: string;
   description?: string;
   course_id?: string;
   exp_bonus_percent: number;
+  /** Optional pre-quiz lesson block shown to students before the quiz. */
+  lesson?: LessonFormData;
   questions: QuestionFormData[];
 }

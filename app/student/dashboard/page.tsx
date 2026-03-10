@@ -14,11 +14,26 @@ import { browserSupabase as supabase } from '@/lib/browserClient';
 import { Header } from '@/components/ui/Header';
 import { Footer } from '@/components/ui/Footer';
 import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { BadgeDisplay } from '@/components/ui/BadgeDisplay';
 import { ExpBar } from '@/components/game/ExpBar';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { calculateRank } from '@/lib/expSystem';
 import type { User, Module, Badge, GameSession } from '@/types';
+
+interface EnrolledClass {
+  enrollment_id: string;
+  class_id: string;
+  class_name: string;
+  teacher_name: string;
+  status: string;
+}
+
+interface AvailableClass {
+  class_id: string;
+  class_name: string;
+  teacher_name: string;
+}
 
 interface DashboardData {
   user: User;
@@ -33,6 +48,10 @@ export default function StudentDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [enrolledClasses, setEnrolledClasses] = useState<EnrolledClass[]>([]);
+  const [availableClasses, setAvailableClasses] = useState<AvailableClass[]>([]);
+  const [showClassBrowser, setShowClassBrowser] = useState(false);
+  const [enrollingId, setEnrollingId] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -88,6 +107,13 @@ export default function StudentDashboard() {
 
         const resolvedModules = (modules ?? []) as Module[];
 
+        // Fetch enrolled classes
+        const enrollRes = await fetch(`/api/enrollments?studentId=${userId}`);
+        if (enrollRes.ok) {
+          const { enrollments } = await enrollRes.json();
+          setEnrolledClasses(enrollments ?? []);
+        }
+
         setData({
           user,
           modules: resolvedModules,
@@ -133,6 +159,43 @@ export default function StudentDashboard() {
     window.location.href = '/login';
   };
 
+  const loadAvailableClasses = async () => {
+    const res = await fetch('/api/classes');
+    if (!res.ok) return;
+    const { classes } = await res.json();
+    // Filter out already-enrolled classes
+    const enrolledIds = new Set(enrolledClasses.map((e) => e.class_id));
+    setAvailableClasses((classes ?? []).filter((c: AvailableClass) => !enrolledIds.has(c.class_id)));
+    setShowClassBrowser(true);
+  };
+
+  const handleJoinClass = async (classId: string) => {
+    if (!data?.user.id) return;
+    setEnrollingId(classId);
+    try {
+      const res = await fetch('/api/enrollments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: data.user.id, classId }),
+      });
+      if (res.ok) {
+        const joined = availableClasses.find((c) => c.class_id === classId);
+        if (joined) {
+          setEnrolledClasses((prev) => [...prev, { enrollment_id: '', class_id: classId, class_name: joined.class_name, teacher_name: joined.teacher_name, status: 'approved' }]);
+          setAvailableClasses((prev) => prev.filter((c) => c.class_id !== classId));
+        }
+      }
+    } finally {
+      setEnrollingId(null);
+    }
+  };
+
+  const handleDropClass = async (classId: string) => {
+    if (!data?.user.id) return;
+    await fetch(`/api/enrollments?studentId=${data.user.id}&classId=${classId}`, { method: 'DELETE' });
+    setEnrolledClasses((prev) => prev.filter((e) => e.class_id !== classId));
+  };
+
   const MEDAL_EMOJI: Record<string, string> = { gold: '🥇', silver: '🥈', bronze: '🥉', none: '✅' };
 
   return (
@@ -153,6 +216,9 @@ export default function StudentDashboard() {
               </p>
               <h1 className="text-2xl font-bold text-white">Welcome back, {user.name.split(' ')[0]}</h1>
               <p className="text-sm text-gray-500 mt-0.5">{user.total_exp} total XP earned</p>
+              <Link href="/student/profile" className="text-xs text-cyan-500 hover:text-cyan-400 transition-colors mt-1 inline-block">
+                View profile →
+              </Link>
             </div>
             <div className="sm:w-64">
               <ExpBar totalExp={user.total_exp} level={user.level} rankName={rankName} />
@@ -245,12 +311,69 @@ export default function StudentDashboard() {
                       {s.finished_at ? new Date(s.finished_at).toLocaleDateString() : 'In progress'}
                     </p>
                   </div>
-                  <span className="text-xs text-green-400 font-semibold flex-shrink-0">
-                    +{s.exp_awarded} XP
-                  </span>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="text-xs text-green-400 font-semibold">+{s.exp_awarded} XP</span>
+                    <Link href={`/quiz/review/${s.session_id}`} className="text-xs text-cyan-500 hover:text-cyan-400 transition-colors">
+                      Review
+                    </Link>
+                  </div>
                 </div>
               ))}
             </div>
+          )}
+        </section>
+
+        {/* ─── My Classes ────────────────────────────────────────────────────── */}
+        <section aria-labelledby="classes-heading">
+          <div className="flex items-center justify-between mb-3">
+            <h2 id="classes-heading" className="text-sm font-semibold text-white">My Classes</h2>
+            <Button size="sm" variant="secondary" onClick={showClassBrowser ? () => setShowClassBrowser(false) : loadAvailableClasses}>
+              {showClassBrowser ? '✕ Close' : '+ Join a Class'}
+            </Button>
+          </div>
+
+          {/* Enrolled classes list */}
+          {enrolledClasses.filter(e => e.status !== 'dropped').length === 0 ? (
+            <p className="text-sm text-gray-600">You haven&apos;t joined any classes yet.</p>
+          ) : (
+            <div className="space-y-2 mb-4">
+              {enrolledClasses.filter(e => e.status !== 'dropped').map((cls) => (
+                <div key={cls.class_id} className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-gray-900/40 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold text-white">{cls.class_name}</p>
+                    <p className="text-xs text-gray-500">Teacher: {cls.teacher_name}</p>
+                  </div>
+                  <button
+                    onClick={() => handleDropClass(cls.class_id)}
+                    className="text-xs text-gray-600 hover:text-red-400 transition-colors"
+                  >
+                    Drop
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Browse available classes */}
+          {showClassBrowser && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2 mt-2">
+              <p className="text-xs text-gray-500 mb-2">Available classes to join:</p>
+              {availableClasses.length === 0 ? (
+                <p className="text-xs text-gray-600">No other classes available right now.</p>
+              ) : (
+                availableClasses.map((cls) => (
+                  <div key={cls.class_id} className="flex items-center justify-between gap-4 rounded-xl border border-cyan-500/15 bg-cyan-500/5 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{cls.class_name}</p>
+                      <p className="text-xs text-gray-500">Teacher: {cls.teacher_name}</p>
+                    </div>
+                    <Button size="sm" loading={enrollingId === cls.class_id} onClick={() => handleJoinClass(cls.class_id)}>
+                      Join
+                    </Button>
+                  </div>
+                ))
+              )}
+            </motion.div>
           )}
         </section>
 

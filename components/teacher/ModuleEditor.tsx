@@ -10,7 +10,7 @@ import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { QuestionForm } from './QuestionForm';
 import { Button } from '@/components/ui/Button';
-import type { QuestionFormData, ModuleFormData } from '@/types';
+import type { QuestionFormData, ModuleFormData, LessonFormData } from '@/types';
 
 interface ModuleEditorProps {
   teacherId: string;
@@ -23,6 +23,9 @@ export function ModuleEditor({ teacherId, editModuleId, initialData, onSaved }: 
   const [moduleName, setModuleName] = useState(initialData?.module_name ?? '');
   const [description, setDescription] = useState(initialData?.description ?? '');
   const [expBonus, setExpBonus] = useState(initialData?.exp_bonus_percent ?? 0);
+  const [lesson, setLesson] = useState<LessonFormData>(
+    initialData?.lesson ?? { lesson_title: '', content: '' }
+  );
   const [questions, setQuestions] = useState<QuestionFormData[]>(
     initialData?.questions ?? [
       {
@@ -95,6 +98,7 @@ export function ModuleEditor({ teacherId, editModuleId, initialData, onSaved }: 
           module_name: moduleName.trim(),
           description: description.trim() || undefined,
           exp_bonus_percent: expBonus,
+          lesson: (lesson.lesson_title?.trim() || lesson.content?.trim()) ? lesson : undefined,
           questions,
         }),
       });
@@ -159,6 +163,44 @@ export function ModuleEditor({ teacherId, editModuleId, initialData, onSaved }: 
             value={expBonus}
             onChange={(e) => setExpBonus(Math.max(0, parseInt(e.target.value) || 0))}
             className="w-24 rounded-lg bg-gray-800 border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-cyan-500"
+          />
+        </div>
+      </div>
+
+      {/* Lesson Content */}
+      <div className="space-y-4 rounded-xl border border-white/10 bg-gray-900/60 p-5">
+        <div>
+          <h2 className="text-sm font-semibold text-white mb-0.5">Lesson Content</h2>
+          <p className="text-xs text-gray-500 mb-3">
+            Optional reading material shown to students before the quiz.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="lesson-title" className="block text-xs text-gray-400 mb-1">
+            Lesson Title
+          </label>
+          <input
+            id="lesson-title"
+            type="text"
+            value={lesson.lesson_title ?? ''}
+            onChange={(e) => setLesson((prev) => ({ ...prev, lesson_title: e.target.value }))}
+            placeholder="e.g. Introduction to SQL Injection"
+            className="w-full rounded-lg bg-gray-800 border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-cyan-500 placeholder-gray-600"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="lesson-content" className="block text-xs text-gray-400 mb-1">
+            Content
+          </label>
+          <textarea
+            id="lesson-content"
+            rows={6}
+            value={lesson.content ?? ''}
+            onChange={(e) => setLesson((prev) => ({ ...prev, content: e.target.value }))}
+            placeholder="Write the lesson content here. Supports plain text — explain key concepts students should know before attempting the quiz."
+            className="w-full rounded-lg bg-gray-800 border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-cyan-500 resize-y placeholder-gray-600"
           />
         </div>
       </div>
