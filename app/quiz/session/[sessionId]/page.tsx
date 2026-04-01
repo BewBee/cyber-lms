@@ -15,6 +15,7 @@ import { Header } from '@/components/ui/Header';
 import { Footer } from '@/components/ui/Footer';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { QuizInterface } from '@/components/game/QuizInterface';
+import { TerminalRain } from '@/components/game/TerminalRain';
 import type { User } from '@/types';
 
 export default function QuizSessionPage() {
@@ -88,6 +89,7 @@ export default function QuizSessionPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
+      <TerminalRain />
       <Header userRole="student" userName={user.name} />
 
       <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-10 sm:px-6">

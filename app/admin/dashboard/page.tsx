@@ -12,9 +12,11 @@ import { browserSupabase as supabase } from '@/lib/browserClient';
 import { Header } from '@/components/ui/Header';
 import { Footer } from '@/components/ui/Footer';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { ChapterBuilder } from '@/components/campaign/ChapterBuilder';
 import type { User } from '@/types';
 
 type SortField = 'name' | 'role' | 'total_exp' | 'created_at';
+type AdminTab = 'users' | 'campaign';
 
 export default function AdminDashboard() {
   const [admin, setAdmin] = useState<User | null>(null);
@@ -24,6 +26,7 @@ export default function AdminDashboard() {
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ id: string; msg: string } | null>(null);
+  const [activeTab, setActiveTab] = useState<AdminTab>('users');
 
   const loadData = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -108,6 +111,35 @@ export default function AdminDashboard() {
           <h1 className="text-2xl font-bold text-white">System Dashboard</h1>
           <p className="text-sm text-gray-500 mt-0.5">Manage users and monitor the platform</p>
         </div>
+
+        {/* Tab Nav */}
+        <div className="flex items-center gap-1 border-b border-white/5 pb-0">
+          {([
+            { id: 'users', label: '👥 Users' },
+            { id: 'campaign', label: '🗺️ Campaign' },
+          ] as { id: AdminTab; label: string }[]).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={[
+                'px-4 py-2 text-xs font-semibold rounded-t-lg border-b-2 transition-all',
+                activeTab === tab.id
+                  ? 'border-cyan-500 text-cyan-400 bg-cyan-500/5'
+                  : 'border-transparent text-gray-500 hover:text-gray-400',
+              ].join(' ')}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Campaign Tab ─────────────────────────────────────────────────────── */}
+        {activeTab === 'campaign' && admin && (
+          <ChapterBuilder adminId={admin.id} />
+        )}
+
+        {/* ── Users Tab content below ───────────────────────────────────────── */}
+        {activeTab === 'users' && (<>
 
         {/* System stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -209,6 +241,8 @@ export default function AdminDashboard() {
             ))}
           </div>
         </section>
+
+        </>)}
       </main>
 
       <Footer />

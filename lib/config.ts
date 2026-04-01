@@ -33,10 +33,10 @@ export const config = {
    * Format: { minLevel: number, name: string }
    */
   RANKS: [
-    { minLevel: 1, name: 'Script Kiddie' },
-    { minLevel: 3, name: 'Packet Rat' },
-    { minLevel: 5, name: 'Firewall Hopper' },
-    { minLevel: 8, name: 'Exploit Dev' },
+    { minLevel: 1,  name: 'Rookie Operative' },
+    { minLevel: 3,  name: 'Packet Scout' },
+    { minLevel: 5,  name: 'Firewall Hopper' },
+    { minLevel: 8,  name: 'Code Cracker' },
     { minLevel: 12, name: 'Red Team Operator' },
     { minLevel: 17, name: 'Zero-Day Hunter' },
     { minLevel: 23, name: 'Cyber Warlord' },

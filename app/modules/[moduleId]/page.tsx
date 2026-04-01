@@ -169,34 +169,40 @@ export default function ModulePage() {
           ← Dashboard
         </Link>
 
-        {/* Module header */}
+        {/* Mission Briefing header */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-cyan-500/20 bg-gray-900/80 p-8"
+          className="rounded-2xl border border-cyan-500/20 bg-gray-900/80 overflow-hidden"
         >
-          <div className="flex items-start gap-4">
-            <span className="text-4xl flex-shrink-0" aria-hidden="true">
-              {mod.module_type === 'core' ? '🏛️' : '📝'}
+          {/* Briefing banner */}
+          <div className="flex items-center gap-3 border-b border-cyan-500/10 bg-cyan-500/5 px-6 py-3">
+            <span className="text-[10px] font-mono text-cyan-600 uppercase tracking-[0.2em]">▸ Mission Briefing</span>
+            <span className="flex-1 h-px bg-cyan-500/15" />
+            <span className="text-[10px] font-mono text-gray-600 uppercase tracking-widest">
+              {mod.module_type === 'core' ? 'Core Protocol' : 'Field Op'}
             </span>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-mono text-cyan-600 uppercase tracking-widest">
-                  {mod.module_type}
-                </span>
-                {mod.exp_bonus_percent > 0 && (
-                  <span className="text-xs bg-green-500/15 text-green-400 border border-green-500/30 rounded-full px-2 py-0.5">
-                    +{mod.exp_bonus_percent}% EXP
-                  </span>
-                )}
-              </div>
-              <h1 className="text-2xl font-bold text-white">{mod.module_name}</h1>
-              {mod.description && (
-                <p className="text-sm text-gray-400 mt-2 leading-relaxed">{mod.description}</p>
-              )}
-              <p className="text-xs text-gray-600 mt-3">
-                {mod.question_count} question{mod.question_count !== 1 ? 's' : ''} in this module
-              </p>
+            {mod.exp_bonus_percent > 0 && (
+              <span className="text-[10px] font-mono bg-green-500/15 text-green-400 border border-green-500/20 rounded px-2 py-0.5">
+                +{mod.exp_bonus_percent}% EXP
+              </span>
+            )}
+          </div>
+          <div className="p-6 space-y-3">
+            <h1 className="text-2xl font-bold text-white tracking-tight">{mod.module_name}</h1>
+            {mod.description && (
+              <p className="text-sm text-gray-400 leading-relaxed">{mod.description}</p>
+            )}
+            <div className="flex items-center gap-4 pt-1">
+              <span className="text-xs font-mono text-gray-600">
+                {mod.question_count} question{mod.question_count !== 1 ? 's' : ''}
+              </span>
+              <span className="text-gray-700">·</span>
+              <span className="text-xs font-mono text-gray-600">
+                ~{Math.ceil((mod.question_count > 10 ? 10 : mod.question_count) * 0.5)} min
+              </span>
+              <span className="text-gray-700">·</span>
+              <span className="text-xs font-mono text-cyan-700">EXP reward on completion</span>
             </div>
           </div>
         </motion.div>
@@ -354,20 +360,30 @@ export default function ModulePage() {
           </section>
         )}
 
-        {/* Quiz CTA */}
-        <div className="rounded-2xl border border-cyan-500/15 bg-cyan-500/5 p-8 text-center">
-          <h2 className="text-lg font-bold text-white mb-2">Ready to test your knowledge?</h2>
+        {/* Deploy CTA */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-cyan-950/30 to-gray-900 p-8 text-center"
+        >
+          <p className="text-[10px] font-mono text-cyan-700 uppercase tracking-[0.2em] mb-2">▸ Awaiting Deployment</p>
+          <h2 className="text-lg font-bold text-white mb-2">
+            {mod.question_count === 0 ? 'No intel loaded yet' : 'Operative — are you ready to deploy?'}
+          </h2>
           <p className="text-sm text-gray-500 mb-6">
-            Complete the quiz to earn EXP and a medal. {mod.question_count > 10 ? `${mod.question_count} questions available (10 selected randomly).` : ''}
+            {mod.question_count > 10
+              ? `${mod.question_count} questions in database — 10 selected at random. Earn EXP and a medal.`
+              : 'Complete the assessment to earn EXP and unlock your medal.'}
           </p>
           <Button
             size="lg"
             onClick={() => router.push(`/quiz/session/${moduleId}`)}
             disabled={mod.question_count === 0}
           >
-            {mod.question_count === 0 ? 'No questions yet' : 'Start Quiz →'}
+            {mod.question_count === 0 ? 'No questions yet' : '⚡ Deploy Now'}
           </Button>
-        </div>
+        </motion.div>
       </main>
 
       <Footer />

@@ -15,11 +15,21 @@ import { Header } from '@/components/ui/Header';
 import { Footer } from '@/components/ui/Footer';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { BadgeDisplay } from '@/components/ui/BadgeDisplay';
+import { BadgeShowcase } from '@/components/ui/BadgeShowcase';
 import { ExpBar } from '@/components/game/ExpBar';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { calculateRank } from '@/lib/expSystem';
+import { CampaignMap } from '@/components/campaign/CampaignMap';
+import { QuizMascot } from '@/components/game/QuizMascot';
 import type { User, Module, Badge, GameSession } from '@/types';
+
+function getMascotGreeting(name: string): string {
+  const h = new Date().getHours();
+  if (h < 12) return `Morning, ${name}. Your next mission awaits.`;
+  if (h < 17) return `Welcome back, ${name}. Ready to breach?`;
+  if (h < 21) return `Evening, ${name}. Time to level up.`;
+  return `Still up, ${name}? Operatives never sleep.`;
+}
 
 interface EnrolledClass {
   enrollment_id: string;
@@ -49,6 +59,34 @@ interface DashboardData {
 
 
 
+function TerminalStandby() {
+  const lines = [
+    '> SCANNING FOR MISSIONS...',
+    '> NO ACTIVE ASSIGNMENTS FOUND',
+    '> CONTACT YOUR INSTRUCTOR TO BEGIN',
+  ];
+  return (
+    <div className="rounded-xl border border-white/5 bg-gray-900/40 px-5 py-4 font-mono text-xs space-y-1.5">
+      {lines.map((line, i) => (
+        <motion.p
+          key={line}
+          initial={{ opacity: 0, x: -8 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: i * 0.35, duration: 0.3 }}
+          className="text-green-500/70"
+        >
+          {line}
+        </motion.p>
+      ))}
+      <motion.span
+        animate={{ opacity: [1, 0, 1] }}
+        transition={{ duration: 1, repeat: Infinity }}
+        className="inline-block w-2 h-3 bg-green-500/60 align-middle"
+      />
+    </div>
+  );
+}
+
 export default function StudentDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,6 +95,7 @@ export default function StudentDashboard() {
   const [availableClasses, setAvailableClasses] = useState<AvailableClass[]>([]);
   const [showClassBrowser, setShowClassBrowser] = useState(false);
   const [enrollingId, setEnrollingId] = useState<string | null>(null);
+  const [globalRank, setGlobalRank] = useState<number | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -114,6 +153,14 @@ export default function StudentDashboard() {
         if (enrollRes.ok) {
           const { enrollments } = await enrollRes.json();
           setEnrolledClasses(enrollments ?? []);
+        }
+
+        // Fetch global rank position
+        const lbRes = await fetch('/api/leaderboard?limit=500');
+        if (lbRes.ok) {
+          const { leaderboard } = await lbRes.json();
+          const entry = (leaderboard ?? []).find((e: { id: string; rank_position: number }) => e.id === userId);
+          if (entry?.rank_position) setGlobalRank(entry.rank_position);
         }
 
         setData({
@@ -214,23 +261,81 @@ export default function StudentDashboard() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-gray-900 via-gray-900 to-cyan-950/25 p-6"
+          className="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-gray-900 via-gray-900 to-cyan-950/25 px-5 py-4"
         >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <p className="text-xs font-mono text-cyan-600 uppercase tracking-widest mb-1">
-                {rankName}
-              </p>
-              <h1 className="text-2xl font-bold text-white">Welcome back, {user.name.split(' ')[0]}</h1>
-              <p className="text-sm text-gray-500 mt-0.5">{user.total_exp} total XP earned</p>
-              <Link href="/student/profile" className="text-xs text-cyan-500 hover:text-cyan-400 transition-colors mt-1 inline-block">
-                View profile →
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-xs font-mono text-cyan-600 uppercase tracking-widest">{rankName}</p>
+                {globalRank && (
+                  <motion.span
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.4 }}
+                    className="text-[10px] font-mono bg-cyan-500/10 border border-cyan-500/20 text-cyan-500 rounded-full px-2 py-0.5"
+                  >
+                    #{globalRank} globally
+                  </motion.span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 mt-0.5">
+                <QuizMascot mood="idle" size={32} />
+                <div>
+                  <h1 className="text-xl font-bold text-white leading-tight">{getMascotGreeting(user.name.split(' ')[0])}</h1>
+                  <p className="text-xs text-gray-600 mt-0.5">{user.total_exp} total XP earned</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="w-52 hidden sm:block">
+                <ExpBar totalExp={user.total_exp} level={user.level} rankName={rankName} />
+              </div>
+              <Link href="/student/profile" className="text-xs text-cyan-500 hover:text-cyan-400 transition-colors border border-cyan-500/20 hover:border-cyan-500/40 rounded-lg px-3 py-1.5">
+                Profile →
               </Link>
             </div>
-            <div className="sm:w-64">
-              <ExpBar totalExp={user.total_exp} level={user.level} rankName={rankName} />
-            </div>
           </div>
+        </motion.div>
+
+        {/* ─── Last operation highlight ──────────────────────────────────────── */}
+        {recentSessions.length > 0 && (() => {
+          const last = recentSessions[0];
+          const mod = modules.find((m) => m.module_id === last.module_id);
+          if (!mod) return null;
+          return (
+            <motion.div
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.15 }}
+              className="flex items-center justify-between gap-4 rounded-xl border border-amber-500/15 bg-amber-500/5 px-4 py-3"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-lg flex-shrink-0">🎯</span>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-mono text-amber-600 uppercase tracking-widest">Last Operation</p>
+                  <p className="text-sm font-semibold text-white truncate">{mod.module_name}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <span className="text-xs text-gray-500">{last.accuracy?.toFixed(0)}% accuracy</span>
+                <Link
+                  href={`/quiz/session/${last.module_id}`}
+                  className="text-xs font-semibold text-amber-400 hover:text-amber-300 border border-amber-500/25 hover:border-amber-500/50 rounded-lg px-3 py-1.5 transition-colors"
+                >
+                  Replay ↗
+                </Link>
+              </div>
+            </motion.div>
+          );
+        })()}
+
+        {/* ─── CAMPAIGN MAP (main hero) ───────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <CampaignMap studentId={user.id} />
         </motion.div>
 
         {/* ─── Stats row ─────────────────────────────────────────────────────── */}
@@ -249,15 +354,14 @@ export default function StudentDashboard() {
           ))}
         </div>
 
-        {/* ─── Modules grid ──────────────────────────────────────────────────── */}
+        {/* ─── Side Quests (modules) ─────────────────────────────────────────── */}
         <section aria-labelledby="modules-heading">
-          <h2 id="modules-heading" className="text-sm font-semibold text-white mb-3">
-            Available Modules
-          </h2>
+          <div className="flex items-center gap-2 mb-3">
+            <h2 id="modules-heading" className="text-sm font-semibold text-white">⚔️ Side Quests</h2>
+            <span className="text-[10px] font-mono text-gray-600 border border-gray-700/50 rounded px-1.5">OPTIONAL</span>
+          </div>
           {modules.length === 0 ? (
-            <p className="text-sm text-gray-600">
-              No modules available yet. Join a class below to unlock your teacher&apos;s modules.
-            </p>
+            <TerminalStandby />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {modules.map((mod) => (
@@ -400,13 +504,16 @@ export default function StudentDashboard() {
 
         {/* ─── Badges ────────────────────────────────────────────────────────── */}
         <section aria-labelledby="badges-heading">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-1">
             <h2 id="badges-heading" className="text-sm font-semibold text-white">Badges</h2>
             <Link href="/leaderboard" className="text-xs text-cyan-400 hover:text-cyan-300">
               Leaderboard →
             </Link>
           </div>
-          <BadgeDisplay badges={badges} maxVisible={6} />
+          <p className="text-xs text-gray-600 mb-3">
+            {badges.length} / 5 unlocked
+          </p>
+          <BadgeShowcase earnedBadges={badges} />
         </section>
       </main>
 
