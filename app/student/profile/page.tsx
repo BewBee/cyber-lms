@@ -38,6 +38,12 @@ export default function StudentProfilePage() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Codename edit state
+  const [editingCodename, setEditingCodename] = useState(false);
+  const [codenameInput, setCodenameInput] = useState('');
+  const [codenameMsg, setCodenameMsg] = useState<string | null>(null);
+  const [savingCodename, setSavingCodename] = useState(false);
+
   useEffect(() => {
     async function load() {
       try {
@@ -104,6 +110,24 @@ export default function StudentProfilePage() {
     load();
   }, []);
 
+  const handleSaveCodename = async () => {
+    if (!data) return;
+    setSavingCodename(true); setCodenameMsg(null);
+    const trimmed = codenameInput.trim().slice(0, 24);
+    const { error } = await supabase
+      .from('users')
+      .update({ codename: trimmed || null })
+      .eq('id', data.user.id);
+    if (error) { setCodenameMsg('✗ Failed to save'); }
+    else {
+      setData((prev) => prev ? { ...prev, user: { ...prev.user, codename: trimmed || null } } : prev);
+      setCodenameMsg('✓ Saved!');
+      setEditingCodename(false);
+    }
+    setSavingCodename(false);
+    setTimeout(() => setCodenameMsg(null), 3000);
+  };
+
   if (loading) return (
     <div className="flex flex-col min-h-screen">
       <Header userRole="student" />
@@ -153,6 +177,42 @@ export default function StudentProfilePage() {
                 </div>
               </div>
               <p className="text-xs font-mono text-cyan-600 uppercase tracking-widest mt-1">{rankName}</p>
+
+              {/* Codename */}
+              <div className="flex items-center gap-2 mt-2">
+                {editingCodename ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 font-mono">@</span>
+                    <input
+                      value={codenameInput}
+                      onChange={(e) => setCodenameInput(e.target.value.replace(/\s/g, '_').slice(0, 24))}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveCodename(); if (e.key === 'Escape') setEditingCodename(false); }}
+                      placeholder="your_handle"
+                      maxLength={24}
+                      autoFocus
+                      className="rounded bg-gray-800 border border-cyan-500/40 text-white text-xs px-2 py-1 w-36 focus:outline-none focus:border-cyan-500 font-mono placeholder-gray-600"
+                    />
+                    <button onClick={handleSaveCodename} disabled={savingCodename}
+                      className="text-xs bg-cyan-500 hover:bg-cyan-400 text-black font-semibold rounded px-2 py-1 disabled:opacity-50 transition-colors">
+                      {savingCodename ? '…' : 'Save'}
+                    </button>
+                    <button onClick={() => setEditingCodename(false)} className="text-xs text-gray-600 hover:text-gray-300 transition-colors">✕</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setCodenameInput(user.codename ?? ''); setEditingCodename(true); }}
+                    className="flex items-center gap-1.5 group"
+                    title="Set your hacker handle"
+                  >
+                    <span className="text-xs font-mono text-gray-600">@</span>
+                    <span className={`text-xs font-mono transition-colors ${user.codename ? 'text-cyan-400 group-hover:text-cyan-300' : 'text-gray-600 group-hover:text-gray-400 italic'}`}>
+                      {user.codename ?? 'set codename'}
+                    </span>
+                    <span className="text-[10px] text-gray-700 group-hover:text-gray-500 transition-colors">✎</span>
+                  </button>
+                )}
+                {codenameMsg && <span className={`text-[10px] font-mono ${codenameMsg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{codenameMsg}</span>}
+              </div>
             </div>
             <div className="sm:w-56">
               <ExpBar totalExp={user.total_exp} level={user.level} rankName={rankName} />

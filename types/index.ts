@@ -12,6 +12,8 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  /** Optional hacker handle / codename chosen by the student. */
+  codename?: string | null;
   role: UserRole;
   total_exp: number;
   level: number;
@@ -155,6 +157,7 @@ export interface StudentBadge {
 export interface LeaderboardEntry {
   id: string;
   name: string;
+  codename?: string | null;
   total_exp: number;
   level: number;
   badge_icon?: string | null;

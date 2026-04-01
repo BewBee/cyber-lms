@@ -105,6 +105,11 @@ export function QuizInterface({
   const [soundOn, setSoundOn] = useState(false);
   useEffect(() => { setSoundOn(isSoundEnabled()); }, []);
 
+  // Hearts / lives system
+  const MAX_HEARTS = 3;
+  const [hearts, setHearts] = useState(MAX_HEARTS);
+  const [gameOver, setGameOver] = useState(false);
+
   // Floating +XP particles
   const [xpParticles, setXpParticles] = useState<{ id: number; x: number }[]>([]);
   const particleId = useRef(0);
@@ -201,8 +206,15 @@ export function QuizInterface({
             const id = ++particleId.current;
             setXpParticles((p) => [...p, { id, x: Math.random() * 60 - 30 }]);
             setTimeout(() => setXpParticles((p) => p.filter((pt) => pt.id !== id)), 900);
+          } else {
+            playSound('wrong');
+            setShakeCard(true);
+            setHearts((h) => {
+              const next = h - 1;
+              if (next <= 0) setGameOver(true);
+              return next;
+            });
           }
-          else { playSound('wrong'); setShakeCard(true); }
           newAttempt.streakAtAttempt = newStreak;
         }
       }
@@ -215,7 +227,7 @@ export function QuizInterface({
 
   // ─── Next question ─────────────────────────────────────────────────────────────
   const handleNext = useCallback(async () => {
-    if (currentIndex < questions.length - 1) {
+    if (currentIndex < questions.length - 1 && !gameOver) {
       setCurrentIndex((i) => i + 1);
       setPhase('decrypt');
     } else {
@@ -249,7 +261,7 @@ export function QuizInterface({
         setErrorMsg(String((e as Error).message));
       }
     }
-  }, [currentIndex, questions.length, attempts, studentId, moduleId, maxStreak, onComplete]);
+  }, [currentIndex, questions.length, attempts, studentId, moduleId, maxStreak, onComplete, gameOver]);
 
   // ─── Keyboard shortcuts A/B/C/D + Enter ──────────────────────────────────────
   useEffect(() => {
@@ -454,6 +466,31 @@ export function QuizInterface({
             />
           </div>
         )}
+      </div>
+
+      {/* Hearts / Lives display */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1" aria-label={`${hearts} lives remaining`}>
+          {Array.from({ length: MAX_HEARTS }).map((_, i) => (
+            <motion.span
+              key={i}
+              animate={i >= hearts ? { scale: [1, 1.3, 0.8, 1], opacity: 0.3 } : { opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className={`text-base leading-none select-none ${i < hearts ? 'drop-shadow-[0_0_6px_rgba(239,68,68,0.7)]' : 'grayscale opacity-30'}`}
+            >
+              ❤️
+            </motion.span>
+          ))}
+          {gameOver && (
+            <motion.span
+              initial={{ opacity: 0, x: -4 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="ml-2 text-xs font-mono text-red-400 uppercase tracking-widest"
+            >
+              💔 Out of lives!
+            </motion.span>
+          )}
+        </div>
       </div>
 
       {/* Keyboard hint */}

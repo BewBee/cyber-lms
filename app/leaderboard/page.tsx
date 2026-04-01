@@ -110,8 +110,14 @@ export default function LeaderboardPage() {
 
                   {/* Name + rank */}
                   <div role="cell">
-                    <p className="text-sm font-semibold text-white truncate">{entry.name}</p>
-                    <p className="text-xs font-mono text-gray-600">{rankName}</p>
+                    <p className="text-sm font-semibold text-white truncate">
+                      {entry.codename ? (
+                        <span className="font-mono text-cyan-300">@{entry.codename}</span>
+                      ) : entry.name}
+                    </p>
+                    <p className="text-xs font-mono text-gray-600">
+                      {entry.codename ? entry.name + ' · ' : ''}{rankName}
+                    </p>
                   </div>
 
                   {/* Level */}
