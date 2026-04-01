@@ -20,7 +20,7 @@ import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { calculateRank } from '@/lib/expSystem';
 import { CampaignMap } from '@/components/campaign/CampaignMap';
 import { QuizMascot } from '@/components/game/QuizMascot';
-import type { User, Module, Badge, GameSession } from '@/types';
+import type { User, Module, Badge } from '@/types';
 
 function getMascotGreeting(name: string): string {
   const h = new Date().getHours();
@@ -140,16 +140,48 @@ export default function StudentDashboard() {
           .map((sb: Record<string, unknown>) => sb.badges)
           .filter(Boolean) as Badge[];
 
-        // Fetch recent sessions
+        // Fetch ALL sessions to compute per-module stats
         const { data: sessions } = await supabase
           .from('game_sessions')
-          .select('session_id, module_id, total_score, accuracy, medal_awarded, exp_awarded, finished_at')
+          .select('session_id, module_id, accuracy, medal_awarded, exp_awarded, finished_at')
           .eq('student_id', userId)
           .not('finished_at', 'is', null)
-          .order('finished_at', { ascending: false })
-          .limit(5);
+          .order('finished_at', { ascending: false });
 
         const resolvedModules = (modulesJson.modules ?? []) as StudentModule[];
+
+        // Build per-module stats — group by module_id, keep best accuracy + total XP
+        const statsMap = new Map<string, ModuleStats>();
+        for (const s of sessions ?? []) {
+          const existing = statsMap.get(s.module_id);
+          const mod = resolvedModules.find((m) => m.module_id === s.module_id);
+          if (!existing) {
+            statsMap.set(s.module_id, {
+              module_id: s.module_id,
+              module_name: mod?.module_name ?? 'Unknown',
+              totalXp: s.exp_awarded ?? 0,
+              bestAccuracy: s.accuracy ?? 0,
+              attempts: 1,
+              bestMedal: s.medal_awarded ?? 'none',
+              lastSessionId: s.session_id,
+              lastPlayed: s.finished_at ?? '',
+            });
+          } else {
+            existing.totalXp += s.exp_awarded ?? 0;
+            existing.attempts += 1;
+            if ((s.accuracy ?? 0) > existing.bestAccuracy) {
+              existing.bestAccuracy = s.accuracy ?? 0;
+              existing.bestMedal = s.medal_awarded ?? existing.bestMedal;
+              existing.lastSessionId = s.session_id;
+            }
+          }
+        }
+        const moduleStats = Array.from(statsMap.values())
+          .sort((a, b) => new Date(b.lastPlayed).getTime() - new Date(a.lastPlayed).getTime());
+
+        const lastSession = sessions && sessions.length > 0
+          ? { module_id: sessions[0].module_id, accuracy: sessions[0].accuracy ?? 0 }
+          : null;
 
         // Fetch enrolled classes
         const enrollRes = await fetch(`/api/enrollments?studentId=${userId}`);
@@ -170,7 +202,9 @@ export default function StudentDashboard() {
           user,
           modules: resolvedModules,
           badges,
-          recentSessions: (sessions ?? []) as GameSession[],
+          moduleStats,
+          totalSessions: (sessions ?? []).length,
+          lastSession,
         });
       } catch (e) {
         setErrorMsg(String((e as Error).message));
@@ -203,8 +237,9 @@ export default function StudentDashboard() {
     );
   }
 
-  const { user, modules, badges, recentSessions } = data;
+  const { user, modules, badges, moduleStats, totalSessions, lastSession } = data;
   const rankName = calculateRank(user.level);
+  const MEDAL_BADGE: Record<string, string> = { gold: '🥇', silver: '🥈', bronze: '🥉', none: '—' };
 
   // Build class_id → teacher_name lookup from already-loaded enrolledClasses
   const classTeacherMap = new Map<string, string>(
@@ -216,7 +251,6 @@ export default function StudentDashboard() {
     window.location.href = '/login';
   };
 
-  const MEDAL_EMOJI: Record<string, string> = { gold: '🥇', silver: '🥈', bronze: '🥉', none: '✅' };
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -264,9 +298,8 @@ export default function StudentDashboard() {
         </motion.div>
 
         {/* ─── Last operation highlight ──────────────────────────────────────── */}
-        {recentSessions.length > 0 && (() => {
-          const last = recentSessions[0];
-          const mod = modules.find((m) => m.module_id === last.module_id);
+        {lastSession && (() => {
+          const mod = modules.find((m) => m.module_id === lastSession.module_id);
           if (!mod) return null;
           return (
             <motion.div
@@ -283,9 +316,9 @@ export default function StudentDashboard() {
                 </div>
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
-                <span className="text-xs text-gray-500">{last.accuracy?.toFixed(0)}% accuracy</span>
+                <span className="text-xs text-gray-500">{lastSession.accuracy.toFixed(0)}% accuracy</span>
                 <Link
-                  href={`/quiz/session/${last.module_id}`}
+                  href={`/quiz/session/${lastSession.module_id}`}
                   className="text-xs font-semibold text-amber-400 hover:text-amber-300 border border-amber-500/25 hover:border-amber-500/50 rounded-lg px-3 py-1.5 transition-colors"
                 >
                   Replay ↗
@@ -307,10 +340,10 @@ export default function StudentDashboard() {
         {/* ─── Stats row ─────────────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: 'Level',    value: user.level,            icon: '⚡', color: 'text-cyan-400',   border: 'border-cyan-500/20',   bg: 'bg-cyan-500/5'   },
-            { label: 'Badges',   value: badges.length,         icon: '🎖️', color: 'text-amber-400',  border: 'border-amber-500/20',  bg: 'bg-amber-500/5'  },
-            { label: 'Sessions', value: recentSessions.length, icon: '🎮', color: 'text-purple-400', border: 'border-purple-500/20', bg: 'bg-purple-500/5' },
-            { label: 'Modules',  value: modules.length,        icon: '📚', color: 'text-green-400',  border: 'border-green-500/20',  bg: 'bg-green-500/5'  },
+            { label: 'Level',    value: user.level,       icon: '⚡', color: 'text-cyan-400',   border: 'border-cyan-500/20',   bg: 'bg-cyan-500/5'   },
+            { label: 'Badges',   value: badges.length,    icon: '🎖️', color: 'text-amber-400',  border: 'border-amber-500/20',  bg: 'bg-amber-500/5'  },
+            { label: 'Sessions', value: totalSessions,    icon: '🎮', color: 'text-purple-400', border: 'border-purple-500/20', bg: 'bg-purple-500/5' },
+            { label: 'Modules',  value: modules.length,   icon: '📚', color: 'text-green-400',  border: 'border-green-500/20',  bg: 'bg-green-500/5'  },
           ].map(({ label, value, icon, color, border, bg }) => (
             <div key={label} className={`rounded-xl border ${border} ${bg} p-4 text-center`}>
               <p className="text-xl mb-1" aria-hidden="true">{icon}</p>
@@ -319,6 +352,27 @@ export default function StudentDashboard() {
             </div>
           ))}
         </div>
+
+        {/* ─── My Classes shortcut ───────────────────────────────────────────── */}
+        <Link href="/student/classes">
+          <motion.div
+            whileHover={{ scale: 1.01 }}
+            className="flex items-center justify-between rounded-xl border border-cyan-500/15 bg-cyan-500/5 hover:border-cyan-500/30 hover:bg-cyan-500/8 px-5 py-4 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🏫</span>
+              <div>
+                <p className="text-sm font-semibold text-white">My Classes</p>
+                <p className="text-xs text-gray-500">
+                  {enrolledClasses.filter(e => e.status !== 'dropped').length > 0
+                    ? `${enrolledClasses.filter(e => e.status !== 'dropped').length} enrolled — view modules & side quests`
+                    : 'Browse and join a class'}
+                </p>
+              </div>
+            </div>
+            <span className="text-cyan-500 text-sm">→</span>
+          </motion.div>
+        </Link>
 
         {/* ─── Side Quests (modules) ─────────────────────────────────────────── */}
         <section aria-labelledby="modules-heading">
@@ -377,63 +431,54 @@ export default function StudentDashboard() {
           )}
         </section>
 
-        {/* ─── Recent sessions ───────────────────────────────────────────────── */}
-        <section aria-labelledby="sessions-heading">
-          <h2 id="sessions-heading" className="text-sm font-semibold text-white mb-3">
-            Recent Sessions
-          </h2>
-          {recentSessions.length === 0 ? (
-            <p className="text-sm text-gray-600">No sessions yet. Start a quiz above!</p>
-          ) : (
+        {/* ─── Quest Log (per-module stats) ──────────────────────────────────── */}
+        {moduleStats.length > 0 && (
+          <section aria-labelledby="questlog-heading">
+            <div className="flex items-center justify-between mb-3">
+              <h2 id="questlog-heading" className="text-sm font-semibold text-white">📋 Quest Log</h2>
+              <Link href="/student/profile" className="text-xs text-cyan-500 hover:text-cyan-400 transition-colors">
+                Full history →
+              </Link>
+            </div>
             <div className="space-y-2">
-              {recentSessions.map((s) => (
-                <div
-                  key={s.session_id}
-                  className="flex items-center gap-4 rounded-xl border border-white/5 bg-gray-900/40 px-4 py-3"
-                >
-                  <span className="text-xl" aria-hidden="true">
-                    {MEDAL_EMOJI[s.medal_awarded ?? 'none']}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-300 font-medium">
-                      {s.accuracy?.toFixed(1)}% accuracy
-                    </p>
-                    <p className="text-xs text-gray-600">
-                      {s.finished_at ? new Date(s.finished_at).toLocaleDateString() : 'In progress'}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="text-xs text-green-400 font-semibold">+{s.exp_awarded} XP</span>
-                    <Link href={`/quiz/review/${s.session_id}`} className="text-xs text-cyan-500 hover:text-cyan-400 transition-colors">
-                      Review
-                    </Link>
-                  </div>
-                </div>
-              ))}
+              {moduleStats.slice(0, 5).map((ms, i) => {
+                const acc = ms.bestAccuracy;
+                const BAR = acc >= 90 ? 'bg-amber-400' : acc >= 75 ? 'bg-cyan-400' : acc >= 60 ? 'bg-orange-400' : 'bg-red-400';
+                return (
+                  <motion.div
+                    key={ms.module_id}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="flex items-center gap-3 rounded-xl border border-white/5 bg-gray-900/40 px-4 py-3"
+                  >
+                    <span className="text-base flex-shrink-0">{MEDAL_BADGE[ms.bestMedal] ?? '—'}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{ms.module_name}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="w-20 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${BAR}`} style={{ width: `${acc}%` }} />
+                        </div>
+                        <span className="text-[10px] font-mono text-gray-500">{acc.toFixed(0)}% best</span>
+                        <span className="text-gray-700">·</span>
+                        <span className="text-[10px] font-mono text-gray-600">{ms.attempts}x played</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs font-bold text-green-400">{ms.totalXp} XP</span>
+                      <Link
+                        href={`/quiz/session/${ms.module_id}`}
+                        className="text-[11px] text-amber-400 hover:text-amber-300 border border-amber-500/20 rounded px-2 py-0.5 transition-colors"
+                      >
+                        Replay
+                      </Link>
+                    </div>
+                  </motion.div>
+                );
+              })}
             </div>
-          )}
-        </section>
-
-        {/* ─── My Classes shortcut ───────────────────────────────────────────── */}
-        <Link href="/student/classes">
-          <motion.div
-            whileHover={{ scale: 1.01 }}
-            className="flex items-center justify-between rounded-xl border border-cyan-500/15 bg-cyan-500/5 hover:border-cyan-500/30 hover:bg-cyan-500/8 px-5 py-4 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🏫</span>
-              <div>
-                <p className="text-sm font-semibold text-white">My Classes</p>
-                <p className="text-xs text-gray-500">
-                  {enrolledClasses.filter(e => e.status !== 'dropped').length > 0
-                    ? `${enrolledClasses.filter(e => e.status !== 'dropped').length} enrolled — view modules & side quests`
-                    : 'Browse and join a class'}
-                </p>
-              </div>
-            </div>
-            <span className="text-cyan-500 text-sm">→</span>
-          </motion.div>
-        </Link>
+          </section>
+        )}
 
         {/* ─── Badges ────────────────────────────────────────────────────────── */}
         <section aria-labelledby="badges-heading">
