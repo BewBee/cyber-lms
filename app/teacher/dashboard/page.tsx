@@ -55,6 +55,13 @@ export default function TeacherDashboard() {
   const [moduleMgmtLoading, setModuleMgmtLoading] = useState(false);
   const [addModuleSelections, setAddModuleSelections] = useState<Record<string, string>>({});
 
+  // Student enrollment management state
+  interface EnrolledStudent { enrollment_id: string; student_id: string; name: string; email: string; total_exp: number; level: number; joined_at: string; }
+  const [studentsClassId, setStudentsClassId] = useState<string | null>(null);
+  const [classStudentsMap, setClassStudentsMap] = useState<Record<string, EnrolledStudent[]>>({});
+  const [studentsLoading, setStudentsLoading] = useState(false);
+  const [droppingStudentId, setDroppingStudentId] = useState<string | null>(null);
+
   const loadData = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -240,6 +247,48 @@ export default function TeacherDashboard() {
       setShowEditor(false); // close create panel if open
     } finally {
       setEditLoadingId(null);
+    }
+  };
+
+  const handleOpenStudents = async (classId: string) => {
+    if (studentsClassId === classId) { setStudentsClassId(null); return; }
+    setStudentsClassId(classId);
+    if (classStudentsMap[classId] !== undefined) return;
+    setStudentsLoading(true);
+    try {
+      const res = await fetch(`/api/classes/${classId}/students?teacherId=${data?.teacher.id}`);
+      if (res.ok) {
+        const { students } = await res.json();
+        setClassStudentsMap((prev) => ({ ...prev, [classId]: students ?? [] }));
+      }
+    } finally {
+      setStudentsLoading(false);
+    }
+  };
+
+  const handleDropStudent = async (classId: string, studentId: string) => {
+    if (!confirm('Remove this student from the class?')) return;
+    setDroppingStudentId(studentId);
+    try {
+      const res = await fetch(
+        `/api/classes/${classId}/students?teacherId=${data?.teacher.id}&studentId=${studentId}`,
+        { method: 'DELETE' }
+      );
+      if (res.ok) {
+        setClassStudentsMap((prev) => ({
+          ...prev,
+          [classId]: (prev[classId] ?? []).filter((s) => s.student_id !== studentId),
+        }));
+        // Update student count in class list
+        setData((prev) => prev ? {
+          ...prev,
+          classes: prev.classes.map((c) =>
+            c.class_id === classId ? { ...c, student_count: c.student_count - 1 } : c
+          ),
+        } : prev);
+      }
+    } finally {
+      setDroppingStudentId(null);
     }
   };
 
@@ -458,6 +507,13 @@ export default function TeacherDashboard() {
                     >
                       {managingClassId === cls.class_id ? 'Hide Modules' : 'Modules'}
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleOpenStudents(cls.class_id)}
+                    >
+                      {studentsClassId === cls.class_id ? 'Hide Students' : 'Students'}
+                    </Button>
                     <Button size="sm" variant="secondary" onClick={() => loadAnalytics(cls.class_id)} loading={analyticsLoading}>
                       Analytics
                     </Button>
@@ -474,6 +530,39 @@ export default function TeacherDashboard() {
                   <p className="text-xs text-gray-600">
                     Created {new Date(cls.created_at).toLocaleDateString()}
                   </p>
+
+                  {/* Student enrollment panel */}
+                  {studentsClassId === cls.class_id && (
+                    <div className="mt-3 pt-3 border-t border-white/5">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                        Enrolled Students
+                      </p>
+                      {studentsLoading ? (
+                        <p className="text-xs text-gray-600">Loading…</p>
+                      ) : (classStudentsMap[cls.class_id] ?? []).length === 0 ? (
+                        <p className="text-xs text-gray-600">No students enrolled yet.</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {(classStudentsMap[cls.class_id] ?? []).map((s) => (
+                            <div key={s.student_id} className="flex items-center justify-between gap-2 rounded-lg bg-gray-800/60 px-3 py-2">
+                              <div className="min-w-0">
+                                <p className="text-xs text-gray-300 truncate font-medium">{s.name}</p>
+                                <p className="text-[10px] text-gray-600 truncate">{s.email} · Lv.{s.level} · {s.total_exp} XP</p>
+                              </div>
+                              <button
+                                onClick={() => handleDropStudent(cls.class_id, s.student_id)}
+                                disabled={droppingStudentId === s.student_id}
+                                className="text-xs text-gray-600 hover:text-red-400 transition-colors flex-shrink-0 disabled:opacity-50"
+                                title="Remove from class"
+                              >
+                                {droppingStudentId === s.student_id ? '…' : '✕ Remove'}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Module assignment panel */}
                   {managingClassId === cls.class_id && (

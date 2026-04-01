@@ -33,6 +33,7 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [addingTo, setAddingTo] = useState<string | null>(null);
+  const [deletingQId, setDeletingQId] = useState<string | null>(null);
   const [newQ, setNewQ] = useState<Omit<Question, 'question_id'>>({
     question_text: '', difficulty: 1, explanation: '',
     question_options: [
@@ -43,10 +44,37 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
     ],
   });
 
-  useEffect(() => {
+  // Create new module state
+  const [showCreate, setShowCreate] = useState(false);
+  const [newMod, setNewMod] = useState({ module_name: '', description: '', exp_bonus_percent: 0 });
+  const [creatingMod, setCreatingMod] = useState(false);
+
+  const loadModules = () =>
     supabase.from('modules').select('module_id, module_name, description').eq('module_type', 'core').order('module_name')
       .then(({ data }) => setModules((data ?? []) as CoreModule[]));
-  }, []);
+
+  useEffect(() => { loadModules(); }, []);
+
+  const handleCreateModule = async () => {
+    if (!newMod.module_name.trim()) return;
+    setCreatingMod(true); setMsg(null);
+    const { error } = await supabase.from('modules').insert({
+      module_name: newMod.module_name.trim(),
+      description: newMod.description.trim(),
+      module_type: 'core',
+      exp_bonus_percent: newMod.exp_bonus_percent,
+      created_by: adminId,
+    });
+    if (error) { setMsg('✗ Failed to create module'); }
+    else {
+      setMsg('✓ Module created');
+      setNewMod({ module_name: '', description: '', exp_bonus_percent: 0 });
+      setShowCreate(false);
+      await loadModules();
+    }
+    setCreatingMod(false);
+    setTimeout(() => setMsg(null), 3000);
+  };
 
   const loadQuestions = useCallback(async (moduleId: string) => {
     if (questions[moduleId]) return;
@@ -132,13 +160,59 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
     setTimeout(() => setMsg(null), 3000);
   };
 
+  const deleteQuestion = async (questionId: string, moduleId: string) => {
+    if (!confirm('Delete this question? This cannot be undone.')) return;
+    setDeletingQId(questionId); setMsg(null);
+    // Delete options first, then question
+    await supabase.from('question_options').delete().eq('question_id', questionId);
+    const { error } = await supabase.from('questions').delete().eq('question_id', questionId);
+    if (error) {
+      const isFk = error.code === '23503' || error.message?.includes('foreign key');
+      setMsg(isFk ? '✗ Cannot delete — question has student attempt history' : '✗ Delete failed');
+    } else {
+      setQuestions((prev) => ({ ...prev, [moduleId]: (prev[moduleId] ?? []).filter(q => q.question_id !== questionId) }));
+      setMsg('✓ Question deleted');
+    }
+    setDeletingQId(null);
+    setTimeout(() => setMsg(null), 4000);
+  };
+
   const DIFF_LABELS: Record<number, string> = { 1: 'Easy', 2: 'Easy', 3: 'Medium', 4: 'Hard', 5: 'Hard' };
   const DIFF_COLORS: Record<number, string> = { 1: 'text-green-400', 2: 'text-green-400', 3: 'text-yellow-400', 4: 'text-red-400', 5: 'text-red-400' };
   void adminId;
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-gray-500">Click a module to view and edit its questions.</p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-gray-500">Click a module to view and edit its questions.</p>
+        <button onClick={() => setShowCreate((v) => !v)} className="text-xs bg-cyan-500 hover:bg-cyan-400 text-black font-semibold rounded-lg px-3 py-1.5 transition-colors">
+          {showCreate ? '✕ Cancel' : '+ New Core Module'}
+        </button>
+      </div>
+
+      {showCreate && (
+        <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
+          <p className="text-xs font-mono text-cyan-600 uppercase tracking-widest">▸ Create Core Module</p>
+          <input value={newMod.module_name} onChange={(e) => setNewMod({ ...newMod, module_name: e.target.value })}
+            placeholder="Module name…"
+            className="w-full rounded-lg bg-gray-700 border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-cyan-500 placeholder-gray-600" />
+          <textarea value={newMod.description} onChange={(e) => setNewMod({ ...newMod, description: e.target.value })}
+            placeholder="Short description…"
+            rows={2}
+            className="w-full rounded-lg bg-gray-700 border border-white/10 text-white text-sm px-3 py-2 resize-none focus:outline-none focus:border-cyan-500 placeholder-gray-600" />
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-gray-500">EXP Bonus %:</label>
+            <input type="number" min={0} max={100} value={newMod.exp_bonus_percent}
+              onChange={(e) => setNewMod({ ...newMod, exp_bonus_percent: Number(e.target.value) })}
+              className="w-20 rounded bg-gray-700 border border-white/10 text-white text-xs px-2 py-1 focus:outline-none focus:border-cyan-500" />
+          </div>
+          <button onClick={handleCreateModule} disabled={creatingMod || !newMod.module_name.trim()}
+            className="text-xs bg-cyan-500 hover:bg-cyan-400 text-black font-semibold rounded px-4 py-1.5 disabled:opacity-50 transition-colors">
+            {creatingMod ? 'Creating…' : '+ Create Module'}
+          </button>
+        </div>
+      )}
+
       {msg && <p className={`text-xs font-semibold ${msg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{msg}</p>}
 
       {modules.map((mod) => {
@@ -237,7 +311,13 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
                                 </div>
                                 {q.explanation && <p className="text-[10px] text-cyan-700 mt-1 italic">{q.explanation}</p>}
                               </div>
-                              <button onClick={() => setEditQ({ ...q })} className="text-xs text-gray-600 hover:text-cyan-400 transition-colors flex-shrink-0 ml-2">Edit</button>
+                              <div className="flex flex-col gap-1 flex-shrink-0 ml-2">
+                                <button onClick={() => setEditQ({ ...q })} className="text-xs text-gray-600 hover:text-cyan-400 transition-colors">Edit</button>
+                                <button onClick={() => deleteQuestion(q.question_id, mod.module_id)} disabled={deletingQId === q.question_id}
+                                  className="text-xs text-gray-600 hover:text-red-400 transition-colors disabled:opacity-50">
+                                  {deletingQId === q.question_id ? '…' : 'Del'}
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
