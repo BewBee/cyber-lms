@@ -9,17 +9,20 @@ ALTER TABLE public.users
 -- WHERE codename IS NOT NULL;
 
 -- Recreate leaderboard_view to include codename
-CREATE OR REPLACE VIEW leaderboard_view AS
+-- Must DROP first because CREATE OR REPLACE cannot change column order
+DROP VIEW IF EXISTS leaderboard_view;
+
+CREATE VIEW leaderboard_view AS
 SELECT
   u.id,
   u.name,
-  u.codename,
   u.total_exp,
   u.level,
   u.badge_icon,
   COUNT(DISTINCT gs.session_id)                         AS total_sessions,
   ROUND(COALESCE(AVG(gs.accuracy), 0)::NUMERIC, 2)     AS avg_accuracy,
-  ROW_NUMBER() OVER (ORDER BY u.total_exp DESC)         AS rank_position
+  ROW_NUMBER() OVER (ORDER BY u.total_exp DESC)         AS rank_position,
+  u.codename
 FROM users u
 LEFT JOIN game_sessions gs
   ON u.id = gs.student_id
