@@ -22,8 +22,10 @@ interface NavLink {
 }
 
 const NAV_LINKS: NavLink[] = [
-  { href: '/student/dashboard', label: 'Dashboard', roles: ['student'] },
-  { href: '/leaderboard', label: 'Leaderboard', roles: ['student', 'teacher', 'admin'] },
+  { href: '/student/dashboard', label: 'Dashboard',  roles: ['student'] },
+  { href: '/student/classes',   label: 'My Classes', roles: ['student'] },
+  { href: '/student/profile',   label: 'Profile',    roles: ['student'] },
+  { href: '/leaderboard',       label: 'Leaderboard',roles: ['student', 'teacher', 'admin'] },
   { href: '/teacher/dashboard', label: 'My Modules', roles: ['teacher'] },
   { href: '/admin/dashboard',   label: 'Admin Panel', roles: ['admin'] },
 ];

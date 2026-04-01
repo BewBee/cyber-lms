@@ -193,32 +193,70 @@ export default function StudentProfilePage() {
         {/* Session history */}
         <section aria-labelledby="history-heading">
           <h2 id="history-heading" className="text-sm font-semibold text-white mb-3">
-            Session History ({sessions.length})
+            Session History <span className="text-gray-600 font-normal">({sessions.length})</span>
           </h2>
           {sessions.length === 0 ? (
-            <p className="text-sm text-gray-600">No sessions yet.</p>
+            <p className="text-sm text-gray-600">No sessions yet — start a quiz to see your history here.</p>
           ) : (
             <div className="space-y-2">
-              {sessions.map((s) => (
-                <div
-                  key={s.session_id}
-                  className="flex items-center gap-3 rounded-xl border border-white/5 bg-gray-900/40 px-4 py-3"
-                >
-                  <span className="text-lg flex-shrink-0">{MEDAL_EMOJI[s.medal_awarded ?? 'none']}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-white truncate">{s.module_name}</p>
-                    <p className="text-xs text-gray-600">
-                      {s.finished_at ? new Date(s.finished_at).toLocaleDateString() : '—'} · {s.accuracy?.toFixed(1)}% accuracy
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="text-xs text-green-400 font-semibold">+{s.exp_awarded} XP</span>
-                    <Link href={`/quiz/review/${s.session_id}`} className="text-xs text-cyan-500 hover:text-cyan-400 transition-colors">
-                      Review
-                    </Link>
-                  </div>
-                </div>
-              ))}
+              {sessions.map((s, i) => {
+                const acc = s.accuracy ?? 0;
+                const medal = s.medal_awarded ?? 'none';
+                const MEDAL_COLOR: Record<string, string> = {
+                  gold: 'text-amber-400 border-amber-500/30 bg-amber-500/5',
+                  silver: 'text-gray-300 border-gray-500/30 bg-gray-500/5',
+                  bronze: 'text-orange-400 border-orange-500/30 bg-orange-500/5',
+                  none: 'text-gray-500 border-white/5 bg-gray-900/40',
+                };
+                const ACC_BAR_COLOR = acc >= 90 ? 'bg-amber-400' : acc >= 75 ? 'bg-cyan-400' : acc >= 60 ? 'bg-orange-400' : 'bg-red-400';
+                return (
+                  <motion.div
+                    key={s.session_id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.03 }}
+                    className={`rounded-xl border px-4 py-3 ${MEDAL_COLOR[medal]}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Medal */}
+                      <span className="text-xl flex-shrink-0 mt-0.5">{MEDAL_EMOJI[medal]}</span>
+
+                      {/* Main info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{s.module_name}</p>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          {/* Accuracy bar */}
+                          <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden max-w-[120px]">
+                            <div className={`h-full rounded-full ${ACC_BAR_COLOR}`} style={{ width: `${acc}%` }} />
+                          </div>
+                          <span className="text-xs font-mono text-gray-400">{acc.toFixed(0)}%</span>
+                          <span className="text-gray-700">·</span>
+                          <span className="text-xs text-gray-600">
+                            {s.finished_at ? new Date(s.finished_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Right side */}
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                        <span className="text-xs font-bold text-green-400">+{s.exp_awarded} XP</span>
+                        <Link
+                          href={`/quiz/review/${s.session_id}`}
+                          className="text-[11px] font-medium text-cyan-500 hover:text-cyan-300 border border-cyan-500/20 hover:border-cyan-400/40 rounded px-2 py-0.5 transition-colors"
+                        >
+                          Review
+                        </Link>
+                        <Link
+                          href={`/quiz/session/${s.module_id}`}
+                          className="text-[11px] font-medium text-gray-500 hover:text-gray-300 border border-white/8 hover:border-white/20 rounded px-2 py-0.5 transition-colors"
+                        >
+                          Replay
+                        </Link>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </section>

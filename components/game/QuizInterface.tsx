@@ -458,14 +458,23 @@ export function QuizInterface({
 
       {/* Keyboard hint */}
       {phase === 'answering' && (
-        <p className="text-[10px] font-mono text-gray-700 text-right -mb-2">
-          press <kbd className="px-1 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-600">A</kbd>–<kbd className="px-1 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-600">D</kbd> to answer
-        </p>
+        <div className="flex justify-end -mb-2">
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-gray-800/80 border border-white/8 px-2.5 py-1">
+            <span className="text-[10px] text-gray-500 font-mono">keyboard:</span>
+            {['A','B','C','D'].map((k) => (
+              <kbd key={k} className="inline-flex h-5 w-5 items-center justify-center rounded bg-gray-700 border border-gray-600 text-[10px] font-bold text-gray-300">{k}</kbd>
+            ))}
+            <span className="text-[10px] text-gray-500 font-mono">to answer</span>
+          </span>
+        </div>
       )}
       {phase === 'feedback' && (
-        <p className="text-[10px] font-mono text-gray-700 text-right -mb-2">
-          press <kbd className="px-1 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-600">Enter</kbd> to continue
-        </p>
+        <div className="flex justify-end -mb-2">
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-gray-800/80 border border-white/8 px-2.5 py-1">
+            <kbd className="inline-flex h-5 px-1.5 items-center justify-center rounded bg-gray-700 border border-gray-600 text-[10px] font-bold text-gray-300">Enter</kbd>
+            <span className="text-[10px] text-gray-500 font-mono">to continue</span>
+          </span>
+        </div>
       )}
 
       {/* Streak + EXP bar + mascot + sound toggle */}

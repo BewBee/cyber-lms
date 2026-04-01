@@ -14,7 +14,6 @@ import { browserSupabase as supabase } from '@/lib/browserClient';
 import { Header } from '@/components/ui/Header';
 import { Footer } from '@/components/ui/Footer';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { BadgeShowcase } from '@/components/ui/BadgeShowcase';
 import { ExpBar } from '@/components/game/ExpBar';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
@@ -39,22 +38,29 @@ interface EnrolledClass {
   status: string;
 }
 
-interface AvailableClass {
-  class_id: string;
-  class_name: string;
-  teacher_name: string;
-}
-
 interface StudentModule extends Module {
   class_id: string | null;
   class_name: string | null;
+}
+
+interface ModuleStats {
+  module_id: string;
+  module_name: string;
+  totalXp: number;
+  bestAccuracy: number;
+  attempts: number;
+  bestMedal: string;
+  lastSessionId: string;
+  lastPlayed: string;
 }
 
 interface DashboardData {
   user: User;
   modules: StudentModule[];
   badges: Badge[];
-  recentSessions: GameSession[];
+  moduleStats: ModuleStats[];
+  totalSessions: number;
+  lastSession: { module_id: string; accuracy: number } | null;
 }
 
 
@@ -92,9 +98,6 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [enrolledClasses, setEnrolledClasses] = useState<EnrolledClass[]>([]);
-  const [availableClasses, setAvailableClasses] = useState<AvailableClass[]>([]);
-  const [showClassBrowser, setShowClassBrowser] = useState(false);
-  const [enrollingId, setEnrollingId] = useState<string | null>(null);
   const [globalRank, setGlobalRank] = useState<number | null>(null);
 
   useEffect(() => {
@@ -211,43 +214,6 @@ export default function StudentDashboard() {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     window.location.href = '/login';
-  };
-
-  const loadAvailableClasses = async () => {
-    const res = await fetch('/api/classes');
-    if (!res.ok) return;
-    const { classes } = await res.json();
-    // Filter out already-enrolled classes
-    const enrolledIds = new Set(enrolledClasses.filter((e) => e.status !== 'dropped').map((e) => e.class_id));
-    setAvailableClasses((classes ?? []).filter((c: AvailableClass) => !enrolledIds.has(c.class_id)));
-    setShowClassBrowser(true);
-  };
-
-  const handleJoinClass = async (classId: string) => {
-    if (!data?.user.id) return;
-    setEnrollingId(classId);
-    try {
-      const res = await fetch('/api/enrollments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: data.user.id, classId }),
-      });
-      if (res.ok) {
-        const joined = availableClasses.find((c) => c.class_id === classId);
-        if (joined) {
-          setEnrolledClasses((prev) => [...prev, { enrollment_id: '', class_id: classId, class_name: joined.class_name, teacher_name: joined.teacher_name, status: 'approved' }]);
-          setAvailableClasses((prev) => prev.filter((c) => c.class_id !== classId));
-        }
-      }
-    } finally {
-      setEnrollingId(null);
-    }
-  };
-
-  const handleDropClass = async (classId: string) => {
-    if (!data?.user.id) return;
-    await fetch(`/api/enrollments?studentId=${data.user.id}&classId=${classId}`, { method: 'DELETE' });
-    setEnrolledClasses((prev) => prev.filter((e) => e.class_id !== classId));
   };
 
   const MEDAL_EMOJI: Record<string, string> = { gold: '🥇', silver: '🥈', bronze: '🥉', none: '✅' };
@@ -448,59 +414,26 @@ export default function StudentDashboard() {
           )}
         </section>
 
-        {/* ─── My Classes ────────────────────────────────────────────────────── */}
-        <section aria-labelledby="classes-heading">
-          <div className="flex items-center justify-between mb-3">
-            <h2 id="classes-heading" className="text-sm font-semibold text-white">My Classes</h2>
-            <Button size="sm" variant="secondary" onClick={showClassBrowser ? () => setShowClassBrowser(false) : loadAvailableClasses}>
-              {showClassBrowser ? '✕ Close' : '+ Join a Class'}
-            </Button>
-          </div>
-
-          {/* Enrolled classes list */}
-          {enrolledClasses.filter(e => e.status !== 'dropped').length === 0 ? (
-            <p className="text-sm text-gray-600">You haven&apos;t joined any classes yet.</p>
-          ) : (
-            <div className="space-y-2 mb-4">
-              {enrolledClasses.filter(e => e.status !== 'dropped').map((cls) => (
-                <div key={cls.class_id} className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-gray-900/40 px-4 py-3">
-                  <div>
-                    <p className="text-sm font-semibold text-white">{cls.class_name}</p>
-                    <p className="text-xs text-gray-500">Teacher: {cls.teacher_name}</p>
-                  </div>
-                  <button
-                    onClick={() => handleDropClass(cls.class_id)}
-                    className="text-xs text-gray-600 hover:text-red-400 transition-colors"
-                  >
-                    Drop
-                  </button>
-                </div>
-              ))}
+        {/* ─── My Classes shortcut ───────────────────────────────────────────── */}
+        <Link href="/student/classes">
+          <motion.div
+            whileHover={{ scale: 1.01 }}
+            className="flex items-center justify-between rounded-xl border border-cyan-500/15 bg-cyan-500/5 hover:border-cyan-500/30 hover:bg-cyan-500/8 px-5 py-4 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🏫</span>
+              <div>
+                <p className="text-sm font-semibold text-white">My Classes</p>
+                <p className="text-xs text-gray-500">
+                  {enrolledClasses.filter(e => e.status !== 'dropped').length > 0
+                    ? `${enrolledClasses.filter(e => e.status !== 'dropped').length} enrolled — view modules & side quests`
+                    : 'Browse and join a class'}
+                </p>
+              </div>
             </div>
-          )}
-
-          {/* Browse available classes */}
-          {showClassBrowser && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2 mt-2">
-              <p className="text-xs text-gray-500 mb-2">Available classes to join:</p>
-              {availableClasses.length === 0 ? (
-                <p className="text-xs text-gray-600">No other classes available right now.</p>
-              ) : (
-                availableClasses.map((cls) => (
-                  <div key={cls.class_id} className="flex items-center justify-between gap-4 rounded-xl border border-cyan-500/15 bg-cyan-500/5 px-4 py-3">
-                    <div>
-                      <p className="text-sm font-semibold text-white">{cls.class_name}</p>
-                      <p className="text-xs text-gray-500">Teacher: {cls.teacher_name}</p>
-                    </div>
-                    <Button size="sm" loading={enrollingId === cls.class_id} onClick={() => handleJoinClass(cls.class_id)}>
-                      Join
-                    </Button>
-                  </div>
-                ))
-              )}
-            </motion.div>
-          )}
-        </section>
+            <span className="text-cyan-500 text-sm">→</span>
+          </motion.div>
+        </Link>
 
         {/* ─── Badges ────────────────────────────────────────────────────────── */}
         <section aria-labelledby="badges-heading">

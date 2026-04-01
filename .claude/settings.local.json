@@ -43,7 +43,8 @@
       "Bash(xargs grep -l \"badge\\\\|Badge\")",
       "Bash(xargs grep -l \"badges\\\\|student_badges\")",
       "Bash(dir C:UsersUSERcyber-lmspagesapi /b)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
