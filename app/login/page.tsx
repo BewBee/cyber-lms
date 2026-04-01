@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -29,6 +29,18 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [devLoading, setDevLoading] = useState<string | null>(null);
+
+  // Redirect to dashboard if already logged in
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return;
+      const { data } = await supabase.from('users').select('role').eq('id', session.user.id).single();
+      const role = data?.role;
+      if (role === 'student') router.replace('/student/dashboard');
+      else if (role === 'teacher') router.replace('/teacher/dashboard');
+      else if (role === 'admin') router.replace('/admin/dashboard');
+    });
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

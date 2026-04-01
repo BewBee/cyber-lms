@@ -38,12 +38,14 @@ export function Header({ userRole: roleProp, userName, onSignOut }: HeaderProps)
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [resolvedRole, setResolvedRole] = useState<UserRole | undefined>(roleProp);
+  const [resolvedName, setResolvedName] = useState<string | undefined>(userName);
 
   // When no role prop is given, read the active session so public pages
   // (leaderboard, home, etc.) never accidentally show wrong role-specific links.
   useEffect(() => {
     if (roleProp) {
       setResolvedRole(roleProp);
+      setResolvedName(userName);
       return;
     }
     (async () => {
@@ -51,12 +53,25 @@ export function Header({ userRole: roleProp, userName, onSignOut }: HeaderProps)
       if (!user) { setResolvedRole(undefined); return; }
       const { data } = await supabase
         .from('users')
-        .select('role')
+        .select('role, name')
         .eq('id', user.id)
         .single();
       if (data?.role) setResolvedRole(data.role as UserRole);
+      if (data?.name) setResolvedName(data.name);
     })();
-  }, [roleProp]);
+  }, [roleProp, userName]);
+
+  // Default sign-out handler used when no onSignOut prop is provided
+  const handleSignOut = onSignOut ?? (async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  });
+
+  // Logo destination: dashboard when logged in, home when not
+  const logoHref =
+    resolvedRole === 'student' ? '/student/dashboard' :
+    resolvedRole === 'teacher' ? '/teacher/dashboard' :
+    resolvedRole === 'admin'   ? '/admin/dashboard'   : '/';
 
   // Only show links whose roles include the resolved role.
   // When role is still unknown (loading / logged-out), show nothing role-specific.
@@ -69,7 +84,7 @@ export function Header({ userRole: roleProp, userName, onSignOut }: HeaderProps)
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
         {/* Logo */}
         <Link
-          href="/"
+          href={logoHref}
           className="flex items-center gap-2 group"
           aria-label="CyberShield LMS home"
         >
@@ -108,14 +123,14 @@ export function Header({ userRole: roleProp, userName, onSignOut }: HeaderProps)
 
         {/* User Info & Sign Out */}
         <div className="flex items-center gap-3">
-          {userName && (
+          {resolvedName && (
             <span className="hidden sm:block text-xs text-gray-500">
-              {userName}
+              {resolvedName}
             </span>
           )}
-          {onSignOut ? (
+          {resolvedRole ? (
             <button
-              onClick={onSignOut}
+              onClick={handleSignOut}
               className="text-xs text-gray-500 hover:text-red-400 transition-colors px-2 py-1 rounded"
               aria-label="Sign out"
             >
