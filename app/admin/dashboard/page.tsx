@@ -94,54 +94,44 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
     loadQuestions(moduleId);
   };
 
+  const refreshQuestions = async (moduleId: string) => {
+    const { data } = await supabase
+      .from('questions')
+      .select('question_id, question_text, difficulty, explanation, question_options ( option_key, option_text, is_correct )')
+      .eq('module_id', moduleId).order('question_text');
+    setQuestions((prev) => ({ ...prev, [moduleId]: (data ?? []) as Question[] }));
+  };
+
   const saveEdit = async () => {
     if (!editQ) return;
     setSaving(true); setMsg(null);
-    // Update question text + difficulty + explanation
-    await supabase.from('questions').update({
-      question_text: editQ.question_text,
-      difficulty: editQ.difficulty,
-      explanation: editQ.explanation,
-    }).eq('question_id', editQ.question_id);
-    // Update each option
-    for (const opt of editQ.question_options) {
-      await supabase.from('question_options')
-        .update({ option_text: opt.option_text, is_correct: opt.is_correct })
-        .eq('question_id', editQ.question_id)
-        .eq('option_key', opt.option_key);
-    }
-    // Refresh questions for this module
     const modId = Object.entries(questions).find(([, qs]) => qs.some(q => q.question_id === editQ.question_id))?.[0];
-    if (modId) {
-      const { data } = await supabase
-        .from('questions')
-        .select('question_id, question_text, difficulty, explanation, question_options ( option_key, option_text, is_correct )')
-        .eq('module_id', modId).order('question_text');
-      setQuestions((prev) => ({ ...prev, [modId]: (data ?? []) as Question[] }));
+    const res = await fetch(`/api/admin/questions/${editQ.question_id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminId, question_text: editQ.question_text, difficulty: editQ.difficulty, explanation: editQ.explanation, options: editQ.question_options }),
+    });
+    const json = await res.json();
+    if (!res.ok) { setMsg(`✗ ${json.error ?? 'Save failed'}`); }
+    else {
+      if (modId) await refreshQuestions(modId);
+      setMsg('✓ Saved'); setEditQ(null);
     }
-    setMsg('✓ Saved'); setSaving(false); setEditQ(null);
+    setSaving(false);
     setTimeout(() => setMsg(null), 3000);
   };
 
   const saveNewQuestion = async (moduleId: string) => {
     if (!newQ.question_text.trim()) return;
     setSaving(true); setMsg(null);
-    const { data: qData } = await supabase.from('questions').insert({
-      module_id: moduleId,
-      question_text: newQ.question_text,
-      difficulty: newQ.difficulty,
-      explanation: newQ.explanation,
-    }).select('question_id').single();
-    if (qData) {
-      for (const opt of newQ.question_options) {
-        await supabase.from('question_options').insert({
-          question_id: qData.question_id,
-          option_key: opt.option_key,
-          option_text: opt.option_text,
-          is_correct: opt.is_correct,
-        });
-      }
-      // Reset + refresh
+    const res = await fetch('/api/admin/questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminId, moduleId, question_text: newQ.question_text, difficulty: newQ.difficulty, explanation: newQ.explanation, options: newQ.question_options }),
+    });
+    const json = await res.json();
+    if (!res.ok) { setMsg(`✗ ${json.error ?? 'Failed to add question'}`); }
+    else {
       setNewQ({ question_text: '', difficulty: 1, explanation: '', question_options: [
         { option_key: 'A', option_text: '', is_correct: true },
         { option_key: 'B', option_text: '', is_correct: false },
@@ -149,11 +139,7 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
         { option_key: 'D', option_text: '', is_correct: false },
       ]});
       setAddingTo(null);
-      const { data } = await supabase
-        .from('questions')
-        .select('question_id, question_text, difficulty, explanation, question_options ( option_key, option_text, is_correct )')
-        .eq('module_id', moduleId).order('question_text');
-      setQuestions((prev) => ({ ...prev, [moduleId]: (data ?? []) as Question[] }));
+      await refreshQuestions(moduleId);
       setMsg('✓ Question added');
     }
     setSaving(false);
@@ -163,13 +149,10 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
   const deleteQuestion = async (questionId: string, moduleId: string) => {
     if (!confirm('Delete this question? This cannot be undone.')) return;
     setDeletingQId(questionId); setMsg(null);
-    // Delete options first, then question
-    await supabase.from('question_options').delete().eq('question_id', questionId);
-    const { error } = await supabase.from('questions').delete().eq('question_id', questionId);
-    if (error) {
-      const isFk = error.code === '23503' || error.message?.includes('foreign key');
-      setMsg(isFk ? '✗ Cannot delete — question has student attempt history' : '✗ Delete failed');
-    } else {
+    const res = await fetch(`/api/admin/questions/${questionId}?adminId=${adminId}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (!res.ok) { setMsg(`✗ ${json.error ?? 'Delete failed'}`); }
+    else {
       setQuestions((prev) => ({ ...prev, [moduleId]: (prev[moduleId] ?? []).filter(q => q.question_id !== questionId) }));
       setMsg('✓ Question deleted');
     }
