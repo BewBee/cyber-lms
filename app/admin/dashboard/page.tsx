@@ -24,16 +24,30 @@ interface Question { question_id: string; question_text: string; difficulty: num
 interface CoreModule { module_id: string; module_name: string; description: string; }
 
 // ── Admin Module Editor ──────────────────────────────────────────────────────
+interface AdminModule { module_id: string; module_name: string; description: string; module_type: string; exp_bonus_percent: number; question_count: number; }
+
 function AdminModuleEditor({ adminId }: { adminId: string }) {
-  const [modules, setModules] = useState<CoreModule[]>([]);
+  const [modules, setModules] = useState<AdminModule[]>([]);
+  const [loadingModules, setLoadingModules] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Record<string, Question[]>>({});
-  const [loadingMod, setLoadingMod] = useState<string | null>(null);
+  const [loadingQ, setLoadingQ] = useState<string | null>(null);
   const [editQ, setEditQ] = useState<Question | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [deletingQId, setDeletingQId] = useState<string | null>(null);
+  const [deletingModId, setDeletingModId] = useState<string | null>(null);
+
+  // Edit module metadata state
+  const [editingMod, setEditingMod] = useState<string | null>(null);
+  const [editModForm, setEditModForm] = useState({ module_name: '', description: '', exp_bonus_percent: 0 });
+
+  // Create module state
+  const [showCreate, setShowCreate] = useState(false);
+  const [newMod, setNewMod] = useState({ module_name: '', description: '', module_type: 'core', exp_bonus_percent: 0 });
+  const [creatingMod, setCreatingMod] = useState(false);
+
   const [newQ, setNewQ] = useState<Omit<Question, 'question_id'>>({
     question_text: '', difficulty: 1, explanation: '',
     question_options: [
@@ -44,49 +58,29 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
     ],
   });
 
-  // Create new module state
-  const [showCreate, setShowCreate] = useState(false);
-  const [newMod, setNewMod] = useState({ module_name: '', description: '', exp_bonus_percent: 0 });
-  const [creatingMod, setCreatingMod] = useState(false);
+  const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(null), 4000); };
 
-  const loadModules = () =>
-    supabase.from('modules').select('module_id, module_name, description').eq('module_type', 'core').order('module_name')
-      .then(({ data }) => setModules((data ?? []) as CoreModule[]));
+  // ── Load all modules via API (service role) ──────────────────────────────
+  const loadModules = useCallback(async () => {
+    setLoadingModules(true);
+    const res = await fetch(`/api/admin/modules?adminId=${adminId}`);
+    if (res.ok) { const { modules: mods } = await res.json(); setModules(mods ?? []); }
+    setLoadingModules(false);
+  }, [adminId]);
 
-  useEffect(() => { loadModules(); }, []);
+  useEffect(() => { loadModules(); }, [loadModules]);
 
-  const handleCreateModule = async () => {
-    if (!newMod.module_name.trim()) return;
-    setCreatingMod(true); setMsg(null);
-    const { error } = await supabase.from('modules').insert({
-      module_name: newMod.module_name.trim(),
-      description: newMod.description.trim(),
-      module_type: 'core',
-      exp_bonus_percent: newMod.exp_bonus_percent,
-      created_by: adminId,
-    });
-    if (error) { setMsg('✗ Failed to create module'); }
-    else {
-      setMsg('✓ Module created');
-      setNewMod({ module_name: '', description: '', exp_bonus_percent: 0 });
-      setShowCreate(false);
-      await loadModules();
+  // ── Load questions for a module ──────────────────────────────────────────
+  const loadQuestions = async (moduleId: string, force = false) => {
+    if (questions[moduleId] && !force) return;
+    setLoadingQ(moduleId);
+    const res = await fetch(`/api/admin/modules/${moduleId}?adminId=${adminId}`);
+    if (res.ok) {
+      const { module } = await res.json();
+      setQuestions((prev) => ({ ...prev, [moduleId]: (module.questions ?? []) as Question[] }));
     }
-    setCreatingMod(false);
-    setTimeout(() => setMsg(null), 3000);
+    setLoadingQ(null);
   };
-
-  const loadQuestions = useCallback(async (moduleId: string) => {
-    if (questions[moduleId]) return;
-    setLoadingMod(moduleId);
-    const { data } = await supabase
-      .from('questions')
-      .select('question_id, question_text, difficulty, explanation, question_options ( option_key, option_text, is_correct )')
-      .eq('module_id', moduleId)
-      .order('question_text');
-    setQuestions((prev) => ({ ...prev, [moduleId]: (data ?? []) as Question[] }));
-    setLoadingMod(null);
-  }, [questions]);
 
   const toggleModule = (moduleId: string) => {
     if (expanded === moduleId) { setExpanded(null); return; }
@@ -94,17 +88,63 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
     loadQuestions(moduleId);
   };
 
-  const refreshQuestions = async (moduleId: string) => {
-    const { data } = await supabase
-      .from('questions')
-      .select('question_id, question_text, difficulty, explanation, question_options ( option_key, option_text, is_correct )')
-      .eq('module_id', moduleId).order('question_text');
-    setQuestions((prev) => ({ ...prev, [moduleId]: (data ?? []) as Question[] }));
+  // ── Create module ────────────────────────────────────────────────────────
+  const handleCreateModule = async () => {
+    if (!newMod.module_name.trim()) return;
+    setCreatingMod(true);
+    const res = await fetch('/api/admin/modules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminId, ...newMod }),
+    });
+    const json = await res.json();
+    if (!res.ok) { flash(`✗ ${json.error ?? 'Failed to create'}`); }
+    else {
+      setNewMod({ module_name: '', description: '', module_type: 'core', exp_bonus_percent: 0 });
+      setShowCreate(false);
+      await loadModules();
+      flash('✓ Module created');
+    }
+    setCreatingMod(false);
   };
 
+  // ── Save module metadata ─────────────────────────────────────────────────
+  const handleSaveMod = async (moduleId: string) => {
+    setSaving(true);
+    const res = await fetch(`/api/admin/modules/${moduleId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminId, ...editModForm }),
+    });
+    const json = await res.json();
+    if (!res.ok) { flash(`✗ ${json.error ?? 'Failed to update'}`); }
+    else {
+      setModules((prev) => prev.map((m) => m.module_id === moduleId ? { ...m, ...editModForm } : m));
+      setEditingMod(null);
+      flash('✓ Module updated');
+    }
+    setSaving(false);
+  };
+
+  // ── Delete module ────────────────────────────────────────────────────────
+  const handleDeleteModule = async (moduleId: string) => {
+    if (!confirm('Delete this module? This cannot be undone.')) return;
+    setDeletingModId(moduleId);
+    const res = await fetch(`/api/admin/modules/${moduleId}?adminId=${adminId}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (!res.ok) { flash(`✗ ${json.error ?? 'Delete failed'}`); }
+    else {
+      setModules((prev) => prev.filter((m) => m.module_id !== moduleId));
+      if (expanded === moduleId) setExpanded(null);
+      flash('✓ Module deleted');
+    }
+    setDeletingModId(null);
+  };
+
+  // ── Question operations (via /api/admin/questions routes) ────────────────
   const saveEdit = async () => {
     if (!editQ) return;
-    setSaving(true); setMsg(null);
+    setSaving(true);
     const modId = Object.entries(questions).find(([, qs]) => qs.some(q => q.question_id === editQ.question_id))?.[0];
     const res = await fetch(`/api/admin/questions/${editQ.question_id}`, {
       method: 'PUT',
@@ -112,25 +152,21 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
       body: JSON.stringify({ adminId, question_text: editQ.question_text, difficulty: editQ.difficulty, explanation: editQ.explanation, options: editQ.question_options }),
     });
     const json = await res.json();
-    if (!res.ok) { setMsg(`✗ ${json.error ?? 'Save failed'}`); }
-    else {
-      if (modId) await refreshQuestions(modId);
-      setMsg('✓ Saved'); setEditQ(null);
-    }
+    if (!res.ok) { flash(`✗ ${json.error ?? 'Save failed'}`); }
+    else { if (modId) await loadQuestions(modId, true); setEditQ(null); flash('✓ Question saved'); }
     setSaving(false);
-    setTimeout(() => setMsg(null), 3000);
   };
 
   const saveNewQuestion = async (moduleId: string) => {
     if (!newQ.question_text.trim()) return;
-    setSaving(true); setMsg(null);
+    setSaving(true);
     const res = await fetch('/api/admin/questions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ adminId, moduleId, question_text: newQ.question_text, difficulty: newQ.difficulty, explanation: newQ.explanation, options: newQ.question_options }),
     });
     const json = await res.json();
-    if (!res.ok) { setMsg(`✗ ${json.error ?? 'Failed to add question'}`); }
+    if (!res.ok) { flash(`✗ ${json.error ?? 'Failed to add'}`); }
     else {
       setNewQ({ question_text: '', difficulty: 1, explanation: '', question_options: [
         { option_key: 'A', option_text: '', is_correct: true },
@@ -139,91 +175,149 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
         { option_key: 'D', option_text: '', is_correct: false },
       ]});
       setAddingTo(null);
-      await refreshQuestions(moduleId);
-      setMsg('✓ Question added');
+      await loadQuestions(moduleId, true);
+      // Update question count in module list
+      setModules((prev) => prev.map((m) => m.module_id === moduleId ? { ...m, question_count: m.question_count + 1 } : m));
+      flash('✓ Question added');
     }
     setSaving(false);
-    setTimeout(() => setMsg(null), 3000);
   };
 
   const deleteQuestion = async (questionId: string, moduleId: string) => {
-    if (!confirm('Delete this question? This cannot be undone.')) return;
-    setDeletingQId(questionId); setMsg(null);
+    if (!confirm('Delete this question? Cannot be undone.')) return;
+    setDeletingQId(questionId);
     const res = await fetch(`/api/admin/questions/${questionId}?adminId=${adminId}`, { method: 'DELETE' });
     const json = await res.json();
-    if (!res.ok) { setMsg(`✗ ${json.error ?? 'Delete failed'}`); }
+    if (!res.ok) { flash(`✗ ${json.error ?? 'Delete failed'}`); }
     else {
       setQuestions((prev) => ({ ...prev, [moduleId]: (prev[moduleId] ?? []).filter(q => q.question_id !== questionId) }));
-      setMsg('✓ Question deleted');
+      setModules((prev) => prev.map((m) => m.module_id === moduleId ? { ...m, question_count: Math.max(0, m.question_count - 1) } : m));
+      flash('✓ Question deleted');
     }
     setDeletingQId(null);
-    setTimeout(() => setMsg(null), 4000);
   };
 
   const DIFF_LABELS: Record<number, string> = { 1: 'Easy', 2: 'Easy', 3: 'Medium', 4: 'Hard', 5: 'Hard' };
   const DIFF_COLORS: Record<number, string> = { 1: 'text-green-400', 2: 'text-green-400', 3: 'text-yellow-400', 4: 'text-red-400', 5: 'text-red-400' };
-  void adminId;
+
+  if (loadingModules) return <div className="rounded-xl border border-white/5 bg-gray-900/40 p-6 animate-pulse h-24" />;
 
   return (
     <div className="space-y-3">
+      {/* Toolbar */}
       <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500">Click a module to view and edit its questions.</p>
-        <button onClick={() => setShowCreate((v) => !v)} className="text-xs bg-cyan-500 hover:bg-cyan-400 text-black font-semibold rounded-lg px-3 py-1.5 transition-colors">
-          {showCreate ? '✕ Cancel' : '+ New Core Module'}
+        <p className="text-sm text-gray-400">
+          {modules.length} module{modules.length !== 1 ? 's' : ''} · click to expand questions
+        </p>
+        <button onClick={() => setShowCreate((v) => !v)}
+          className="text-xs bg-cyan-500 hover:bg-cyan-400 text-black font-semibold rounded-lg px-3 py-1.5 transition-colors">
+          {showCreate ? '✕ Cancel' : '+ New Module'}
         </button>
       </div>
 
-      {showCreate && (
-        <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
-          <p className="text-xs font-mono text-cyan-600 uppercase tracking-widest">▸ Create Core Module</p>
-          <input value={newMod.module_name} onChange={(e) => setNewMod({ ...newMod, module_name: e.target.value })}
-            placeholder="Module name…"
-            className="w-full rounded-lg bg-gray-700 border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-cyan-500 placeholder-gray-600" />
-          <textarea value={newMod.description} onChange={(e) => setNewMod({ ...newMod, description: e.target.value })}
-            placeholder="Short description…"
-            rows={2}
-            className="w-full rounded-lg bg-gray-700 border border-white/10 text-white text-sm px-3 py-2 resize-none focus:outline-none focus:border-cyan-500 placeholder-gray-600" />
-          <div className="flex items-center gap-3">
-            <label className="text-xs text-gray-500">EXP Bonus %:</label>
-            <input type="number" min={0} max={100} value={newMod.exp_bonus_percent}
-              onChange={(e) => setNewMod({ ...newMod, exp_bonus_percent: Number(e.target.value) })}
-              className="w-20 rounded bg-gray-700 border border-white/10 text-white text-xs px-2 py-1 focus:outline-none focus:border-cyan-500" />
-          </div>
-          <button onClick={handleCreateModule} disabled={creatingMod || !newMod.module_name.trim()}
-            className="text-xs bg-cyan-500 hover:bg-cyan-400 text-black font-semibold rounded px-4 py-1.5 disabled:opacity-50 transition-colors">
-            {creatingMod ? 'Creating…' : '+ Create Module'}
-          </button>
-        </div>
-      )}
-
       {msg && <p className={`text-xs font-semibold ${msg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{msg}</p>}
 
+      {/* Create Module Form */}
+      <AnimatePresence>
+        {showCreate && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
+              <p className="text-xs font-mono text-cyan-600 uppercase tracking-widest">▸ New Module</p>
+              <div className="grid grid-cols-2 gap-3">
+                <input value={newMod.module_name} onChange={(e) => setNewMod({ ...newMod, module_name: e.target.value })}
+                  placeholder="Module name *" className="col-span-2 rounded-lg bg-gray-700 border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-cyan-500 placeholder-gray-600" />
+                <textarea value={newMod.description} onChange={(e) => setNewMod({ ...newMod, description: e.target.value })}
+                  placeholder="Description…" rows={2}
+                  className="col-span-2 rounded-lg bg-gray-700 border border-white/10 text-white text-sm px-3 py-2 resize-none focus:outline-none focus:border-cyan-500 placeholder-gray-600" />
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-500">Type:</label>
+                  <select value={newMod.module_type} onChange={(e) => setNewMod({ ...newMod, module_type: e.target.value })}
+                    className="rounded bg-gray-700 border border-white/10 text-white text-xs px-2 py-1 focus:outline-none">
+                    <option value="core">Core (story mode)</option>
+                    <option value="teacher">Custom</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-500">EXP Bonus %:</label>
+                  <input type="number" min={0} max={100} value={newMod.exp_bonus_percent}
+                    onChange={(e) => setNewMod({ ...newMod, exp_bonus_percent: Number(e.target.value) })}
+                    className="w-16 rounded bg-gray-700 border border-white/10 text-white text-xs px-2 py-1 focus:outline-none" />
+                </div>
+              </div>
+              <button onClick={handleCreateModule} disabled={creatingMod || !newMod.module_name.trim()}
+                className="text-xs bg-cyan-500 hover:bg-cyan-400 text-black font-semibold rounded px-4 py-1.5 disabled:opacity-50 transition-colors">
+                {creatingMod ? 'Creating…' : '+ Create Module'}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Module List */}
       {modules.map((mod) => {
         const isOpen = expanded === mod.module_id;
         const qs = questions[mod.module_id] ?? [];
+        const isEditingMeta = editingMod === mod.module_id;
         return (
           <div key={mod.module_id} className="rounded-xl border border-white/8 bg-gray-900/60 overflow-hidden">
-            <button
-              onClick={() => toggleModule(mod.module_id)}
-              className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/3 transition-colors text-left"
-            >
-              <div>
-                <p className="text-sm font-semibold text-white">{mod.module_name}</p>
-                <p className="text-xs text-gray-500 truncate max-w-lg">{mod.description}</p>
+            {/* Module header */}
+            <div className="flex items-center gap-2 px-4 py-3">
+              <button onClick={() => toggleModule(mod.module_id)} className="flex-1 flex items-start gap-3 text-left min-w-0">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-white">{mod.module_name}</p>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${mod.module_type === 'core' ? 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10' : 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10'}`}>
+                      {mod.module_type}
+                    </span>
+                    <span className="text-[10px] text-gray-600">{mod.question_count} Qs</span>
+                  </div>
+                  <p className="text-xs text-gray-500 truncate max-w-lg mt-0.5">{mod.description}</p>
+                </div>
+              </button>
+              {/* Action buttons */}
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={() => { setEditingMod(isEditingMeta ? null : mod.module_id); setEditModForm({ module_name: mod.module_name, description: mod.description ?? '', exp_bonus_percent: mod.exp_bonus_percent }); }}
+                  className="text-xs text-gray-600 hover:text-cyan-400 transition-colors px-2 py-1">
+                  {isEditingMeta ? 'Cancel' : 'Edit'}
+                </button>
+                <button onClick={() => handleDeleteModule(mod.module_id)} disabled={deletingModId === mod.module_id}
+                  className="text-xs text-gray-600 hover:text-red-400 transition-colors px-2 py-1 disabled:opacity-50">
+                  {deletingModId === mod.module_id ? '…' : 'Del'}
+                </button>
+                <button onClick={() => toggleModule(mod.module_id)} className={`text-gray-500 px-2 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▾</button>
               </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
-                {questions[mod.module_id] && (
-                  <span className="text-xs text-gray-600">{qs.length} questions</span>
-                )}
-                <span className={`text-gray-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
-              </div>
-            </button>
+            </div>
 
+            {/* Edit module metadata */}
+            <AnimatePresence initial={false}>
+              {isEditingMeta && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.15 }} className="overflow-hidden">
+                  <div className="border-t border-white/5 px-4 py-3 space-y-2 bg-gray-800/40">
+                    <input value={editModForm.module_name} onChange={(e) => setEditModForm({ ...editModForm, module_name: e.target.value })}
+                      placeholder="Module name" className="w-full rounded bg-gray-700 border border-white/10 text-white text-sm px-3 py-1.5 focus:outline-none focus:border-cyan-500" />
+                    <textarea value={editModForm.description} onChange={(e) => setEditModForm({ ...editModForm, description: e.target.value })}
+                      placeholder="Description" rows={2} className="w-full rounded bg-gray-700 border border-white/10 text-white text-xs px-3 py-1.5 resize-none focus:outline-none focus:border-cyan-500" />
+                    <div className="flex items-center gap-3">
+                      <label className="text-xs text-gray-500">EXP Bonus %:</label>
+                      <input type="number" min={0} max={100} value={editModForm.exp_bonus_percent}
+                        onChange={(e) => setEditModForm({ ...editModForm, exp_bonus_percent: Number(e.target.value) })}
+                        className="w-16 rounded bg-gray-700 border border-white/10 text-white text-xs px-2 py-1 focus:outline-none" />
+                      <button onClick={() => handleSaveMod(mod.module_id)} disabled={saving || !editModForm.module_name.trim()}
+                        className="text-xs bg-cyan-500 hover:bg-cyan-400 text-black font-semibold rounded px-3 py-1 disabled:opacity-50 transition-colors ml-auto">
+                        {saving ? 'Saving…' : 'Save Changes'}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Questions panel */}
             <AnimatePresence initial={false}>
               {isOpen && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
                   <div className="border-t border-white/5 px-5 pb-5 pt-3 space-y-3">
-                    {loadingMod === mod.module_id ? (
+                    {loadingQ === mod.module_id ? (
                       <p className="text-xs text-gray-500 py-2">Loading questions…</p>
                     ) : qs.length === 0 ? (
                       <p className="text-xs text-gray-600 py-2">No questions yet.</p>
@@ -231,14 +325,9 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
                       qs.map((q, qi) => (
                         <div key={q.question_id} className="rounded-lg border border-white/5 bg-gray-800/50 p-3 space-y-2">
                           {editQ?.question_id === q.question_id ? (
-                            // ── Edit mode ──────────────────────────────────
                             <div className="space-y-3">
-                              <textarea
-                                value={editQ.question_text}
-                                onChange={(e) => setEditQ({ ...editQ, question_text: e.target.value })}
-                                className="w-full rounded-lg bg-gray-700 border border-white/10 text-white text-xs px-3 py-2 resize-none focus:outline-none focus:border-cyan-500"
-                                rows={2}
-                              />
+                              <textarea value={editQ.question_text} onChange={(e) => setEditQ({ ...editQ, question_text: e.target.value })}
+                                className="w-full rounded-lg bg-gray-700 border border-white/10 text-white text-xs px-3 py-2 resize-none focus:outline-none focus:border-cyan-500" rows={2} />
                               <div className="flex items-center gap-3">
                                 <label className="text-xs text-gray-500">Difficulty:</label>
                                 <select value={editQ.difficulty} onChange={(e) => setEditQ({ ...editQ, difficulty: Number(e.target.value) })}
@@ -246,25 +335,18 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
                                   {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} — {DIFF_LABELS[n]}</option>)}
                                 </select>
                               </div>
-                              <textarea
-                                value={editQ.explanation}
-                                onChange={(e) => setEditQ({ ...editQ, explanation: e.target.value })}
-                                placeholder="Explanation shown after wrong answer…"
-                                className="w-full rounded-lg bg-gray-700 border border-white/10 text-white text-xs px-3 py-2 resize-none focus:outline-none focus:border-cyan-500 placeholder-gray-600"
-                                rows={2}
-                              />
+                              <textarea value={editQ.explanation} onChange={(e) => setEditQ({ ...editQ, explanation: e.target.value })}
+                                placeholder="Explanation…" className="w-full rounded-lg bg-gray-700 border border-white/10 text-white text-xs px-3 py-2 resize-none focus:outline-none focus:border-cyan-500 placeholder-gray-600" rows={2} />
                               {editQ.question_options.map((opt, oi) => (
                                 <div key={opt.option_key} className="flex items-center gap-2">
                                   <span className="text-xs font-bold text-gray-400 w-4">{opt.option_key}</span>
                                   <input value={opt.option_text}
                                     onChange={(e) => setEditQ({ ...editQ, question_options: editQ.question_options.map((o, i) => i === oi ? { ...o, option_text: e.target.value } : o) })}
-                                    className="flex-1 rounded bg-gray-700 border border-white/10 text-white text-xs px-2 py-1 focus:outline-none focus:border-cyan-500"
-                                  />
+                                    className="flex-1 rounded bg-gray-700 border border-white/10 text-white text-xs px-2 py-1 focus:outline-none focus:border-cyan-500" />
                                   <label className="flex items-center gap-1 text-xs text-gray-400 cursor-pointer">
                                     <input type="radio" name={`correct-${q.question_id}`} checked={opt.is_correct}
                                       onChange={() => setEditQ({ ...editQ, question_options: editQ.question_options.map((o, i) => ({ ...o, is_correct: i === oi })) })}
-                                      className="accent-green-500"
-                                    />
+                                      className="accent-green-500" />
                                     Correct
                                   </label>
                                 </div>
@@ -277,7 +359,6 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
                               </div>
                             </div>
                           ) : (
-                            // ── View mode ──────────────────────────────────
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs text-gray-400 mb-1">
@@ -312,10 +393,8 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
                       <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-3">
                         <p className="text-xs font-mono text-cyan-600 uppercase tracking-widest">▸ New Question</p>
                         <textarea value={newQ.question_text} onChange={(e) => setNewQ({ ...newQ, question_text: e.target.value })}
-                          placeholder="Question text…"
-                          className="w-full rounded-lg bg-gray-700 border border-white/10 text-white text-xs px-3 py-2 resize-none focus:outline-none focus:border-cyan-500 placeholder-gray-600"
-                          rows={2}
-                        />
+                          placeholder="Question text…" rows={2}
+                          className="w-full rounded-lg bg-gray-700 border border-white/10 text-white text-xs px-3 py-2 resize-none focus:outline-none focus:border-cyan-500 placeholder-gray-600" />
                         <div className="flex items-center gap-3">
                           <label className="text-xs text-gray-500">Difficulty:</label>
                           <select value={newQ.difficulty} onChange={(e) => setNewQ({ ...newQ, difficulty: Number(e.target.value) })}
@@ -324,23 +403,19 @@ function AdminModuleEditor({ adminId }: { adminId: string }) {
                           </select>
                         </div>
                         <textarea value={newQ.explanation} onChange={(e) => setNewQ({ ...newQ, explanation: e.target.value })}
-                          placeholder="Explanation shown after wrong answer…"
-                          className="w-full rounded-lg bg-gray-700 border border-white/10 text-white text-xs px-3 py-2 resize-none focus:outline-none focus:border-cyan-500 placeholder-gray-600"
-                          rows={2}
-                        />
+                          placeholder="Explanation after wrong answer…" rows={2}
+                          className="w-full rounded-lg bg-gray-700 border border-white/10 text-white text-xs px-3 py-2 resize-none focus:outline-none focus:border-cyan-500 placeholder-gray-600" />
                         {newQ.question_options.map((opt, oi) => (
                           <div key={opt.option_key} className="flex items-center gap-2">
                             <span className="text-xs font-bold text-gray-400 w-4">{opt.option_key}</span>
                             <input value={opt.option_text}
                               onChange={(e) => setNewQ({ ...newQ, question_options: newQ.question_options.map((o, i) => i === oi ? { ...o, option_text: e.target.value } : o) })}
                               placeholder={`Option ${opt.option_key}`}
-                              className="flex-1 rounded bg-gray-700 border border-white/10 text-white text-xs px-2 py-1 focus:outline-none focus:border-cyan-500 placeholder-gray-600"
-                            />
+                              className="flex-1 rounded bg-gray-700 border border-white/10 text-white text-xs px-2 py-1 focus:outline-none focus:border-cyan-500 placeholder-gray-600" />
                             <label className="flex items-center gap-1 text-xs text-gray-400 cursor-pointer">
                               <input type="radio" name={`new-correct-${mod.module_id}`} checked={opt.is_correct}
                                 onChange={() => setNewQ({ ...newQ, question_options: newQ.question_options.map((o, i) => ({ ...o, is_correct: i === oi })) })}
-                                className="accent-green-500"
-                              />
+                                className="accent-green-500" />
                               Correct
                             </label>
                           </div>

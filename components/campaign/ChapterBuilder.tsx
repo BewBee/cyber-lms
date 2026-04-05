@@ -226,16 +226,22 @@ export function ChapterBuilder({ adminId }: ChapterBuilderProps) {
           <p className="text-xs font-mono text-cyan-600 uppercase tracking-widest">Campaign Builder</p>
           <p className="text-sm text-gray-400">{chapters.length} chapters · {chapters.reduce((n, c) => n + c.chapter_missions.length, 0)} total missions</p>
         </div>
-        <button
-          onClick={() => setShowCreate(!showCreate)}
-          className={`text-xs font-bold px-4 py-2 rounded-xl border transition-all ${
-            showCreate
-              ? 'bg-gray-800 border-white/10 text-gray-400'
-              : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20'
-          }`}
-        >
-          {showCreate ? '✕ Cancel' : '+ New Chapter'}
-        </button>
+        {chapters.length >= 7 ? (
+          <span className="text-xs font-bold px-4 py-2 rounded-xl border border-gray-700 text-gray-600 cursor-not-allowed">
+            Max 7 Chapters
+          </span>
+        ) : (
+          <button
+            onClick={() => setShowCreate(!showCreate)}
+            className={`text-xs font-bold px-4 py-2 rounded-xl border transition-all ${
+              showCreate
+                ? 'bg-gray-800 border-white/10 text-gray-400'
+                : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20'
+            }`}
+          >
+            {showCreate ? '✕ Cancel' : '+ New Chapter'}
+          </button>
+        )}
       </div>
 
       {/* Create Chapter Form */}
