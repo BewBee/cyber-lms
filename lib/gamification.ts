@@ -64,6 +64,9 @@ export function processSessionResult(input: SessionInput): GameResult {
     rankName,
     averageResponseTime,
     maxStreak,
+    // These are computed and injected by the attempt API after this function returns
+    coinsAwarded: 0,
+    powerupDrop: null,
   };
 }
 

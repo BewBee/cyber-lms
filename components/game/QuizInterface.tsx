@@ -15,6 +15,7 @@ import { StreakCounter } from './StreakCounter';
 import { MedalReveal } from './MedalReveal';
 import { QuizMascot, type MascotMood } from './QuizMascot';
 import { BossIntro } from './BossIntro';
+import { RewardChest, type ChestTier } from './RewardChest';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { Button } from '@/components/ui/Button';
 import { shuffleOptions, selectQuestions } from '@/lib/quizEngine';
@@ -24,7 +25,7 @@ import type { StudentQuestion, QuestionOption, GameResult, AttemptAnswer } from 
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type Phase = 'loading' | 'boss_intro' | 'decrypt' | 'answering' | 'feedback' | 'results';
+type Phase = 'loading' | 'boss_intro' | 'decrypt' | 'answering' | 'feedback' | 'chest' | 'results';
 export type PowerupType = 'fifty_fifty' | 'shield' | 'skip';
 
 interface Powerup {
@@ -147,6 +148,9 @@ export function QuizInterface({
   const [eliminatedOptions, setEliminatedOptions] = useState<string[]>([]);
   const [powerupMsg, setPowerupMsg]           = useState<string | null>(null);
 
+  // ── Chest + badges ───────────────────────────────────────────────────────────
+  const [badgesEarned, setBadgesEarned] = useState<string[]>([]);
+
   // ── XP particles ─────────────────────────────────────────────────────────────
   const [xpParticles, setXpParticles] = useState<{ id: number; x: number }[]>([]);
   const particleId = useRef(0);
@@ -263,8 +267,8 @@ export function QuizInterface({
       setGameResult(result);
       setCurrentExp(result.newTotalExp);
       setCurrentLevel(result.newLevel);
-      setPhase('results');
-      playSound('complete');
+      setBadgesEarned(data.badgesEarned ?? []);
+      setPhase('chest'); // show reward chest before results
       onComplete?.(result);
     } catch (e) {
       setErrorMsg(String((e as Error).message));
@@ -495,6 +499,30 @@ export function QuizInterface({
           onStart={() => setPhase('decrypt')}
         />
       </AnimatePresence>
+    );
+  }
+
+  // ── Phase: chest ─────────────────────────────────────────────────────────────
+  if (phase === 'chest' && gameResult) {
+    const chestTier: ChestTier =
+      isBoss                         ? 'boss'   :
+      gameResult.medal === 'gold'    ? 'gold'   :
+      gameResult.medal === 'silver'  ? 'silver' : 'bronze';
+
+    return (
+      <div className="max-w-lg mx-auto">
+        <RewardChest
+          tier={chestTier}
+          exp={gameResult.expAwarded}
+          coins={gameResult.coinsAwarded ?? 0}
+          powerupDrop={gameResult.powerupDrop ?? null}
+          badgesEarned={badgesEarned}
+          onComplete={() => {
+            playSound('complete');
+            setPhase('results');
+          }}
+        />
+      </div>
     );
   }
 

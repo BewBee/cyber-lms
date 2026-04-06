@@ -290,9 +290,14 @@ export default function StudentDashboard() {
               <div className="w-52 hidden sm:block">
                 <ExpBar totalExp={user.total_exp} level={user.level} rankName={rankName} />
               </div>
-              <Link href="/student/profile" className="text-xs text-cyan-500 hover:text-cyan-400 transition-colors border border-cyan-500/20 hover:border-cyan-500/40 rounded-lg px-3 py-1.5">
-                Profile →
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link href="/student/store" className="text-xs text-purple-400 hover:text-purple-300 transition-colors border border-purple-500/20 hover:border-purple-500/40 rounded-lg px-3 py-1.5">
+                  🏪 Store
+                </Link>
+                <Link href="/student/profile" className="text-xs text-cyan-500 hover:text-cyan-400 transition-colors border border-cyan-500/20 hover:border-cyan-500/40 rounded-lg px-3 py-1.5">
+                  Profile →
+                </Link>
+              </div>
             </div>
           </div>
         </motion.div>

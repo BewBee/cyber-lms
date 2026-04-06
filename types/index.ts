@@ -17,6 +17,8 @@ export interface User {
   role: UserRole;
   total_exp: number;
   level: number;
+  /** Credits (CR) — in-game currency earned alongside EXP, spent in the store. */
+  coins?: number;
   /** Equipped badge icon shown on leaderboard. Separate from earned badges in student_badges. */
   badge_icon?: string | null;
   created_at: string;
@@ -194,6 +196,10 @@ export interface GameResult {
   rankName: string;
   averageResponseTime: number;
   maxStreak: number;
+  /** Credits earned this session (awarded alongside EXP). */
+  coinsAwarded: number;
+  /** Power-up type dropped from the post-quiz chest (null if no drop). */
+  powerupDrop: string | null;
 }
 
 // ─── Teacher / Analytics ───────────────────────────────────────────────────

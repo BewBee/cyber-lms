@@ -17,6 +17,13 @@ import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { calculateRank } from '@/lib/expSystem';
 import type { User, Badge, GameSession } from '@/types';
 
+interface Powerup { powerup_type: string; quantity: number; }
+const POWERUP_META: Record<string, { icon: string; name: string; desc: string }> = {
+  fifty_fifty: { icon: '🎯', name: '50/50 Protocol',   desc: 'Eliminates 2 wrong answers' },
+  shield:       { icon: '🛡',  name: 'Firewall Shield',  desc: 'Blocks one wrong answer' },
+  skip:         { icon: '⏭',  name: 'Skip Exploit',     desc: 'Skip a question, no penalty' },
+};
+
 const MEDAL_EMOJI: Record<string, string> = { gold: '🥇', silver: '🥈', bronze: '🥉', none: '✅' };
 
 interface ProfileData {
@@ -37,6 +44,9 @@ export default function StudentProfilePage() {
   const [data, setData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Power-up inventory state
+  const [powerups, setPowerups] = useState<Powerup[]>([]);
 
   // Codename edit state
   const [editingCodename, setEditingCodename] = useState(false);
@@ -101,6 +111,13 @@ export default function StudentProfilePage() {
             totalExp: userData.total_exp,
           },
         });
+
+        // Load power-up inventory
+        const puRes = await fetch(`/api/student/powerups?studentId=${userId}`);
+        if (puRes.ok) {
+          const { powerups: inv } = await puRes.json();
+          setPowerups(inv ?? []);
+        }
       } catch (e) {
         setErrorMsg(String((e as Error).message));
       } finally {
@@ -237,6 +254,72 @@ export default function StudentProfilePage() {
             </div>
           ))}
         </div>
+
+        {/* Credits + Inventory ─────────────────────────────────────────────────── */}
+        <motion.section
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          aria-labelledby="inventory-heading"
+          className="rounded-2xl border border-purple-500/15 bg-purple-500/5 p-5 space-y-4"
+        >
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 id="inventory-heading" className="text-sm font-semibold text-white">
+                Power-Up Inventory
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">Equipped in quiz sessions</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-[10px] font-mono text-gray-600 uppercase tracking-widest">Credits</p>
+                <p className="text-lg font-black text-yellow-400 font-mono">
+                  💰 {user.coins ?? 0} <span className="text-xs font-bold text-yellow-600">CR</span>
+                </p>
+              </div>
+              <Link
+                href="/student/store"
+                className="text-xs font-bold px-3 py-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 transition-colors"
+              >
+                🏪 Store
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            {['fifty_fifty', 'shield', 'skip'].map((type) => {
+              const meta = POWERUP_META[type];
+              const qty = powerups.find((p) => p.powerup_type === type)?.quantity ?? 0;
+              return (
+                <div
+                  key={type}
+                  className={`rounded-xl border p-3 text-center transition-all ${
+                    qty > 0
+                      ? 'border-purple-500/25 bg-purple-500/8'
+                      : 'border-white/5 bg-gray-900/30'
+                  }`}
+                >
+                  <p className="text-2xl mb-1">{meta.icon}</p>
+                  <p className="text-xs font-bold text-white truncate">{meta.name}</p>
+                  <p className="text-[10px] text-gray-600 mb-2 truncate">{meta.desc}</p>
+                  <p className={`text-sm font-black font-mono ${qty > 0 ? 'text-purple-400' : 'text-gray-700'}`}>
+                    ×{qty}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {powerups.every((p) => p.quantity === 0) && (
+            <p className="text-xs text-gray-600 text-center">
+              No power-ups in stock.{' '}
+              <Link href="/student/store" className="text-purple-400 hover:text-purple-300 underline underline-offset-2">
+                Visit the store
+              </Link>{' '}
+              or earn drops from quiz chests.
+            </p>
+          )}
+        </motion.section>
 
         {/* Badges */}
         <section aria-labelledby="profile-badges-heading">

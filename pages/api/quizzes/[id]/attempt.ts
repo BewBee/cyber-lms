@@ -44,7 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // ─── Fetch Student ──────────────────────────────────────────────────────────
   const { data: student, error: stuErr } = await supabase
     .from('users')
-    .select('id, total_exp, level, role')
+    .select('id, total_exp, level, role, coins')
     .eq('id', studentId)
     .single();
 
@@ -154,17 +154,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Non-fatal: session is already saved, continue
   }
 
-  // ─── Update Student EXP & Level ─────────────────────────────────────────────
+  // ─── Compute Coins & Powerup Drop ───────────────────────────────────────────
+  // Credits = half of EXP awarded, minimum 5
+  const coinsAwarded = Math.max(5, Math.floor(result.expAwarded / 2));
+
+  // Powerup drop: probability scales with medal tier
+  const dropChance = result.medal === 'gold' ? 0.70 : result.medal === 'silver' ? 0.45 : result.medal === 'bronze' ? 0.25 : 0.10;
+  let powerupDrop: string | null = null;
+  if (Math.random() < dropChance) {
+    const roll = Math.random();
+    powerupDrop = roll < 0.50 ? 'fifty_fifty' : roll < 0.83 ? 'shield' : 'skip';
+  }
+
+  // ─── Update Student EXP, Level & Coins ─────────────────────────────────────
   const { error: expErr } = await supabase
     .from('users')
     .update({
       total_exp: result.newTotalExp,
       level: result.newLevel,
+      coins: (student.coins ?? 0) + coinsAwarded,
     })
     .eq('id', studentId);
 
   if (expErr) {
     console.error('[POST attempt] EXP update error:', expErr.message);
+  }
+
+  // ─── Award Powerup Drop ──────────────────────────────────────────────────────
+  if (powerupDrop) {
+    const { data: existingPu } = await supabase
+      .from('student_powerups')
+      .select('quantity')
+      .eq('student_id', studentId)
+      .eq('powerup_type', powerupDrop)
+      .single();
+
+    if (existingPu) {
+      await supabase
+        .from('student_powerups')
+        .update({ quantity: existingPu.quantity + 1 })
+        .eq('student_id', studentId)
+        .eq('powerup_type', powerupDrop);
+    } else {
+      await supabase
+        .from('student_powerups')
+        .insert({ student_id: studentId, powerup_type: powerupDrop, quantity: 1 });
+    }
   }
 
   // ─── Badge Awards ──────────────────────────────────────────────────────────
@@ -201,7 +236,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // ─── Return Result ──────────────────────────────────────────────────────────
   res.status(200).json({
-    result: { ...result, sessionId: session.session_id },
+    result: {
+      ...result,
+      sessionId: session.session_id,
+      coinsAwarded,
+      powerupDrop,
+    },
     badgesEarned: badgeKeys,
   });
 }
