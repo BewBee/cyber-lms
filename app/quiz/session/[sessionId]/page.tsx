@@ -18,12 +18,21 @@ import { QuizInterface } from '@/components/game/QuizInterface';
 import { TerminalRain } from '@/components/game/TerminalRain';
 import type { User } from '@/types';
 
+// Read ?boss=true from URL without triggering Suspense boundary issues
+function readBossParam(): boolean {
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get('boss') === 'true';
+}
+
 export default function QuizSessionPage() {
   const params = useParams();
   const moduleId = params?.sessionId as string; // sessionId param = moduleId
 
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isBoss, setIsBoss] = useState(false);
+
+  useEffect(() => { setIsBoss(readBossParam()); }, []);
 
   useEffect(() => {
     async function resolveUser() {
@@ -90,13 +99,23 @@ export default function QuizSessionPage() {
   return (
     <div className="flex flex-col min-h-screen">
       <TerminalRain />
+
+      {/* Boss mode: red overlay on top of terminal rain */}
+      {isBoss && (
+        <div className="fixed inset-0 pointer-events-none z-0 bg-red-950/25" />
+      )}
+
       <Header userRole="student" userName={user.name} />
 
       <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-10 sm:px-6">
         {/* Back link */}
         <Link
           href={`/modules/${moduleId}`}
-          className="text-xs text-gray-500 hover:text-cyan-400 transition-colors block mb-6"
+          className={`text-xs transition-colors block mb-6 ${
+            isBoss
+              ? 'text-red-900 hover:text-red-400'
+              : 'text-gray-500 hover:text-cyan-400'
+          }`}
         >
           ← Back to module
         </Link>
@@ -106,6 +125,7 @@ export default function QuizSessionPage() {
           studentId={user.id}
           initialExp={user.total_exp}
           initialLevel={user.level}
+          isBoss={isBoss}
         />
       </main>
 

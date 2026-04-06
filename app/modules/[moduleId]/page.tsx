@@ -30,6 +30,7 @@ export default function ModulePage() {
   const [moduleDetail, setModuleDetail] = useState<ModuleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isBossMission, setIsBossMission] = useState(false);
 
   // Student identity (from Supabase auth or dev session)
   const [studentId, setStudentId] = useState<string | null>(null);
@@ -74,6 +75,15 @@ export default function ModulePage() {
           question_count: questions?.length ?? 0,
           lessons: lessons ?? [],
         });
+
+        // Detect boss mission
+        const { data: bossData } = await supabase
+          .from('chapter_missions')
+          .select('id')
+          .eq('module_id', moduleId)
+          .eq('is_boss', true)
+          .limit(1);
+        setIsBossMission((bossData?.length ?? 0) > 0);
 
         // Fetch assignments for this module
         const { data: assignmentData } = await supabase
@@ -176,11 +186,25 @@ export default function ModulePage() {
           className="rounded-2xl border border-cyan-500/20 bg-gray-900/80 overflow-hidden"
         >
           {/* Briefing banner */}
-          <div className="flex items-center gap-3 border-b border-cyan-500/10 bg-cyan-500/5 px-6 py-3">
-            <span className="text-[10px] font-mono text-cyan-600 uppercase tracking-[0.2em]">▸ Mission Briefing</span>
-            <span className="flex-1 h-px bg-cyan-500/15" />
+          <div className={`flex items-center gap-3 border-b px-6 py-3 ${
+            isBossMission
+              ? 'border-red-500/20 bg-red-500/5'
+              : 'border-cyan-500/10 bg-cyan-500/5'
+          }`}>
+            {isBossMission ? (
+              <motion.span
+                animate={{ opacity: [0.7, 1, 0.7] }}
+                transition={{ repeat: Infinity, duration: 1.4 }}
+                className="text-[10px] font-mono text-red-500 uppercase tracking-[0.2em] font-black"
+              >
+                ⚠ BOSS BATTLE
+              </motion.span>
+            ) : (
+              <span className="text-[10px] font-mono text-cyan-600 uppercase tracking-[0.2em]">▸ Mission Briefing</span>
+            )}
+            <span className={`flex-1 h-px ${isBossMission ? 'bg-red-500/20' : 'bg-cyan-500/15'}`} />
             <span className="text-[10px] font-mono text-gray-600 uppercase tracking-widest">
-              {mod.module_type === 'core' ? 'Core Protocol' : 'Field Op'}
+              {isBossMission ? 'CRITICAL THREAT' : mod.module_type === 'core' ? 'Core Protocol' : 'Field Op'}
             </span>
             {mod.exp_bonus_percent > 0 && (
               <span className="text-[10px] font-mono bg-green-500/15 text-green-400 border border-green-500/20 rounded px-2 py-0.5">
@@ -365,23 +389,38 @@ export default function ModulePage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-cyan-950/30 to-gray-900 p-8 text-center"
+          className={`rounded-2xl border p-8 text-center ${
+            isBossMission
+              ? 'border-red-500/25 bg-gradient-to-br from-red-950/30 to-gray-900'
+              : 'border-cyan-500/15 bg-gradient-to-br from-cyan-950/30 to-gray-900'
+          }`}
         >
-          <p className="text-[10px] font-mono text-cyan-700 uppercase tracking-[0.2em] mb-2">▸ Awaiting Deployment</p>
+          <p className={`text-[10px] font-mono uppercase tracking-[0.2em] mb-2 ${
+            isBossMission ? 'text-red-700' : 'text-cyan-700'
+          }`}>
+            {isBossMission ? '⚠ BOSS ENCOUNTER DETECTED' : '▸ Awaiting Deployment'}
+          </p>
           <h2 className="text-lg font-bold text-white mb-2">
-            {mod.question_count === 0 ? 'No intel loaded yet' : 'Operative — are you ready to deploy?'}
+            {mod.question_count === 0
+              ? 'No intel loaded yet'
+              : isBossMission
+              ? 'Do you have what it takes to defeat the boss?'
+              : 'Operative — are you ready to deploy?'}
           </h2>
           <p className="text-sm text-gray-500 mb-6">
             {mod.question_count > 10
               ? `${mod.question_count} questions in database — 10 selected at random. Earn EXP and a medal.`
+              : isBossMission
+              ? 'A boss battle awaits. Answer correctly to drain the boss HP. Lose all lives and it\'s over.'
               : 'Complete the assessment to earn EXP and unlock your medal.'}
           </p>
           <Button
             size="lg"
-            onClick={() => router.push(`/quiz/session/${moduleId}`)}
+            variant={isBossMission ? 'danger' : 'primary'}
+            onClick={() => router.push(`/quiz/session/${moduleId}${isBossMission ? '?boss=true' : ''}`)}
             disabled={mod.question_count === 0}
           >
-            {mod.question_count === 0 ? 'No questions yet' : '⚡ Deploy Now'}
+            {mod.question_count === 0 ? 'No questions yet' : isBossMission ? '⚔ Enter Boss Battle' : '⚡ Deploy Now'}
           </Button>
         </motion.div>
       </main>

@@ -23,7 +23,7 @@ function ctx(): AudioContext | null {
   try { return new AudioContext(); } catch { return null; }
 }
 
-export type SoundType = 'correct' | 'wrong' | 'complete';
+export type SoundType = 'correct' | 'wrong' | 'complete' | 'powerup' | 'boss_hit' | 'shield_block';
 
 export function playSound(type: SoundType): void {
   if (!isSoundEnabled()) return;
@@ -70,6 +70,56 @@ export function playSound(type: SoundType): void {
       osc.frequency.value = freq;
       const t = now + i * 0.13;
       gain.gain.setValueAtTime(0.1, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+      osc.start(t); osc.stop(t + 0.25);
+    });
+  }
+
+  if (type === 'powerup') {
+    // Quick rising whoosh — power-up activation
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(500, now);
+    osc.frequency.exponentialRampToValueAtTime(1000, now + 0.15);
+    gain.gain.setValueAtTime(0.07, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    osc.start(now); osc.stop(now + 0.22);
+  }
+
+  if (type === 'boss_hit') {
+    // Heavy low-frequency thud — boss takes damage
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(90, now);
+    osc.frequency.exponentialRampToValueAtTime(35, now + 0.35);
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc.start(now); osc.stop(now + 0.35);
+    // Overtone layer
+    const osc2 = ac.createOscillator();
+    const gain2 = ac.createGain();
+    osc2.connect(gain2); gain2.connect(ac.destination);
+    osc2.type = 'sine';
+    osc2.frequency.value = 180;
+    gain2.gain.setValueAtTime(0.06, now);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    osc2.start(now); osc2.stop(now + 0.2);
+  }
+
+  if (type === 'shield_block') {
+    // Metallic clang — shield absorbs hit
+    [800, 1200, 600].forEach((freq, i) => {
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      osc.connect(gain); gain.connect(ac.destination);
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      const t = now + i * 0.04;
+      gain.gain.setValueAtTime(0.08, t);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
       osc.start(t); osc.stop(t + 0.25);
     });
