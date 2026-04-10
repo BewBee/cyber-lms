@@ -82,7 +82,7 @@ export function Header({ userRole: roleProp, userName, onSignOut }: HeaderProps)
     : [];
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/5 bg-gray-950/90 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-green-500/10 bg-gray-950/95 backdrop-blur-md" style={{ boxShadow: '0 1px 0 rgba(0,255,136,0.05)' }}>
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
         {/* Logo */}
         <Link
@@ -93,9 +93,9 @@ export function Header({ userRole: roleProp, userName, onSignOut }: HeaderProps)
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-cyan-500 text-black font-bold text-sm">
             CS
           </span>
-          <span className="hidden sm:block font-bold text-white text-sm tracking-wide group-hover:text-cyan-400 transition-colors">
-            CyberShield
-            <span className="ml-1 text-cyan-500 font-normal text-xs">LMS</span>
+          <span className="hidden sm:block font-mono text-sm tracking-wider group-hover:text-green-400 transition-colors text-green-500">
+            CYBERSHIELD
+            <span className="ml-1 text-green-700 font-normal text-xs">::LMS</span>
           </span>
         </Link>
 
@@ -109,10 +109,10 @@ export function Header({ userRole: roleProp, userName, onSignOut }: HeaderProps)
                 href={link.href}
                 aria-current={isActive ? 'page' : undefined}
                 className={[
-                  'px-3 py-1.5 rounded-md text-sm transition-colors',
+                  'px-3 py-1.5 rounded-md text-xs font-mono tracking-wider transition-colors',
                   isActive
-                    ? 'text-cyan-400 bg-cyan-500/10'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5',
+                    ? 'text-green-400 bg-green-500/10'
+                    : 'text-gray-500 hover:text-green-400 hover:bg-green-500/5',
                 ]
                   .filter(Boolean)
                   .join(' ')}
@@ -126,24 +126,24 @@ export function Header({ userRole: roleProp, userName, onSignOut }: HeaderProps)
         {/* User Info & Sign Out */}
         <div className="flex items-center gap-3">
           {resolvedName && (
-            <span className="hidden sm:block text-xs text-gray-500">
+            <span className="hidden sm:block text-xs font-mono text-green-700 tracking-wider">
               {resolvedName}
             </span>
           )}
           {resolvedRole ? (
             <button
               onClick={handleSignOut}
-              className="text-xs text-gray-500 hover:text-red-400 transition-colors px-2 py-1 rounded"
+              className="text-xs font-mono text-gray-600 hover:text-red-400 transition-colors px-2 py-1 rounded tracking-widest"
               aria-label="Sign out"
             >
-              Sign out
+              // EXIT //
             </button>
           ) : (
             <Link
               href="/login"
-              className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors border border-cyan-500/30 hover:border-cyan-400 px-3 py-1.5 rounded-md"
+              className="text-xs font-mono text-green-500 hover:text-green-300 transition-colors border border-green-500/30 hover:border-green-400 px-3 py-1.5 rounded-md tracking-widest"
             >
-              Sign in
+              [ ACCESS ]
             </Link>
           )}
 
@@ -171,7 +171,7 @@ export function Header({ userRole: roleProp, userName, onSignOut }: HeaderProps)
         <nav
           id="mobile-menu"
           aria-label="Mobile navigation"
-          className="md:hidden border-t border-white/5 bg-gray-950 px-4 py-2"
+          className="md:hidden border-t border-green-500/10 bg-gray-950 px-4 py-2"
         >
           {visibleLinks.map((link) => {
             const isActive = pathname?.startsWith(link.href);
@@ -182,8 +182,8 @@ export function Header({ userRole: roleProp, userName, onSignOut }: HeaderProps)
                 aria-current={isActive ? 'page' : undefined}
                 onClick={() => setMenuOpen(false)}
                 className={[
-                  'block px-3 py-2 rounded-md text-sm mb-1 transition-colors',
-                  isActive ? 'text-cyan-400 bg-cyan-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5',
+                  'block px-3 py-2 rounded-md text-xs font-mono tracking-wider mb-1 transition-colors',
+                  isActive ? 'text-green-400 bg-green-500/10' : 'text-gray-500 hover:text-green-400 hover:bg-green-500/5',
                 ].join(' ')}
               >
                 {link.label}

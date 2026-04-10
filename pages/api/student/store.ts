@@ -19,35 +19,49 @@ export interface StoreItem {
   description: string;
   flavour: string;
   cost: number;
+  level_required: number;
 }
 
 export const STORE_ITEMS: StoreItem[] = [
   {
     id: 'buy_fifty_fifty',
     powerup_type: 'fifty_fifty',
-    name: '50/50 Protocol',
+    name: 'NMAP SCAN',
     icon: '🎯',
-    description: 'Eliminate 2 wrong answers from the current question.',
-    flavour: 'Hack the options. Leave only the truth.',
-    cost: 50,
+    description: 'Eliminates 2 wrong answers. Narrows the target to 2 remaining options.',
+    flavour: '// Run a port scan. See what\'s really open.',
+    cost: 60,
+    level_required: 1,
   },
   {
     id: 'buy_shield',
     powerup_type: 'shield',
-    name: 'Firewall Shield',
+    name: 'FIREWALL.EXE',
     icon: '🛡',
-    description: 'Block the next wrong answer — no life lost.',
-    flavour: 'One mistake, zero consequences.',
-    cost: 80,
+    description: 'Absorbs one wrong answer. No life lost on next mistake.',
+    flavour: '// Deploy perimeter defence. One hit, zero damage.',
+    cost: 90,
+    level_required: 1,
+  },
+  {
+    id: 'buy_packet_sniffer',
+    powerup_type: 'packet_sniffer',
+    name: 'PACKET SNIFFER',
+    icon: '📡',
+    description: 'Intercepts one wrong answer before it breaks your streak.',
+    flavour: '// Capture the packet before it corrupts the chain.',
+    cost: 120,
+    level_required: 5,
   },
   {
     id: 'buy_skip',
     powerup_type: 'skip',
-    name: 'Skip Exploit',
+    name: 'ZERO-DAY EXPLOIT',
     icon: '⏭',
-    description: 'Skip a question with no penalty or attempt recorded.',
-    flavour: 'Ghost through the firewall. Leave no trace.',
+    description: 'Bypass a question entirely. No penalty, no attempt logged.',
+    flavour: '// Unknown vulnerability. Undetected passage.',
     cost: 150,
+    level_required: 1,
   },
 ];
 
@@ -83,14 +97,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const item = STORE_ITEMS.find((i) => i.id === itemId);
     if (!item) return res.status(404).json({ error: 'Item not found' });
 
-    // Check balance
+    // Check balance + level
     const { data: user, error: fetchErr } = await supabase
       .from('users')
-      .select('coins')
+      .select('coins, level')
       .eq('id', studentId)
       .single();
 
     if (fetchErr || !user) return res.status(404).json({ error: 'Student not found' });
+
+    if ((user.level ?? 1) < item.level_required) {
+      return res.status(400).json({ error: `Requires Level ${item.level_required}. You are Level ${user.level ?? 1}.` });
+    }
 
     const currentCoins = user.coins ?? 0;
     if (currentCoins < item.cost) {

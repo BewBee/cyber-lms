@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Header } from '@/components/ui/Header';
 import { Footer } from '@/components/ui/Footer';
+import { TerminalRain } from '@/components/game/TerminalRain';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { calculateRank } from '@/lib/expSystem';
 import type { LeaderboardEntry } from '@/types';
@@ -31,6 +32,7 @@ export default function LeaderboardPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
+      <TerminalRain className="opacity-30" />
       <Header />
 
       <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-10 sm:px-6">

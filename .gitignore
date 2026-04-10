@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code (editor tooling — not part of the project)
+.claude/
+
+# FYP report materials (local only, not part of the codebase)
+public/manual/

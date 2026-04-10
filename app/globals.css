@@ -43,6 +43,22 @@ body {
   background-size: 44px 44px;
 }
 
+/* ─── Global scanlines overlay ───────────────────────────────────────────── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.06) 2px,
+    rgba(0, 0, 0, 0.06) 4px
+  );
+  pointer-events: none;
+  z-index: 9998;
+}
+
 /* ─── Kid-friendly energy classes ────────────────────────────────────────── */
 .text-neon-amber {
   color: #f59e0b;

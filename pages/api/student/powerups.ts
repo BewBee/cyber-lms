@@ -8,12 +8,13 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServiceClient } from '@/lib/supabaseClient';
 import { isNonEmptyString } from '@/lib/apiHelpers';
 
-export type PowerupType = 'fifty_fifty' | 'shield' | 'skip';
+export type PowerupType = 'fifty_fifty' | 'shield' | 'skip' | 'packet_sniffer';
 
 const DEFAULT_POWERUPS: { powerup_type: PowerupType; quantity: number }[] = [
-  { powerup_type: 'fifty_fifty', quantity: 3 },
-  { powerup_type: 'shield',      quantity: 2 },
-  { powerup_type: 'skip',        quantity: 1 },
+  { powerup_type: 'fifty_fifty',   quantity: 3 },
+  { powerup_type: 'shield',        quantity: 2 },
+  { powerup_type: 'skip',          quantity: 1 },
+  { powerup_type: 'packet_sniffer', quantity: 1 },
 ];
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

@@ -1,3 +1,4 @@
+
 /**
  * components/game/ExpBar.tsx — Animated EXP progress bar for CyberShield LMS.
  * Uses Framer Motion spring animation from lib/config.ts ANIMATION_SETTINGS.
@@ -23,7 +24,6 @@ interface ExpBarProps {
 export function ExpBar({ totalExp, level, rankName, expGainedThisSession, className = '' }: ExpBarProps) {
   const { current, needed } = expToNextLevel(totalExp);
   const percentage = Math.min((current / needed) * 100, 100);
-  const nearLevelUp = (needed - current) <= 50;
 
   return (
     <div className={['w-full', className].filter(Boolean).join(' ')} aria-label={`Level ${level}, ${current} of ${needed} XP`}>
@@ -46,10 +46,7 @@ export function ExpBar({ totalExp, level, rankName, expGainedThisSession, classN
             </span>
           )}
           <span className="text-xs text-gray-500 font-mono">
-            {current}<span className="text-gray-700">/{needed}</span>
-          </span>
-          <span className={`text-xs font-mono ${nearLevelUp ? 'text-amber-400 animate-pulse' : 'text-gray-600'}`}>
-            {nearLevelUp ? `⚡ ${needed - current} XP to Lv.${level + 1}!` : `→ Lv.${level + 1}`}
+            {current}/{needed}
           </span>
         </div>
       </div>

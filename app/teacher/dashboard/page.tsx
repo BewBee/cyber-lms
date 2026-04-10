@@ -30,10 +30,12 @@ interface TeacherData {
   totalQuestions: number;
 }
 
+type TeacherTab = 'modules' | 'classes' | 'assignments';
 
 export default function TeacherDashboard() {
   const [data, setData] = useState<TeacherData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<TeacherTab>('modules');
   const [showEditor, setShowEditor] = useState(false);
   const [analytics, setAnalytics] = useState<Record<string, unknown> | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -104,7 +106,7 @@ export default function TeacherDashboard() {
         totalQuestions,
       });
     } catch (e) {
-      console.error(e);
+      console.error('[Teacher Dashboard] Failed to load data:', e);
     } finally {
       setLoading(false);
     }
@@ -321,385 +323,472 @@ export default function TeacherDashboard() {
 
   const { teacher, modules, classes, totalQuestions } = data;
 
+  const TABS: { id: TeacherTab; label: string; icon: string }[] = [
+    { id: 'modules',     label: 'Modules',     icon: '📚' },
+    { id: 'classes',     label: 'Classes',     icon: '🏫' },
+    { id: 'assignments', label: 'Assignments', icon: '📋' },
+  ];
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header userRole="teacher" userName={teacher.name} onSignOut={handleSignOut} />
 
-      <main className="flex-1 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 space-y-8">
-        {/* Hero header */}
+      <main className="flex-1 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 space-y-6">
+
+        {/* ─── Hero header ───────────────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-gray-900 via-gray-900 to-indigo-950/30 p-6 flex items-center justify-between flex-wrap gap-4"
+          className="rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-gray-900 via-gray-900 to-indigo-950/30 px-6 py-5"
         >
-          <div>
-            <p className="text-xs font-mono text-indigo-400 uppercase tracking-widest mb-1">Instructor</p>
-            <h1 className="text-2xl font-bold text-white">Welcome back, {teacher.name.split(' ')[0]}</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{modules.length} module{modules.length !== 1 ? 's' : ''} · {classes.length} class{classes.length !== 1 ? 'es' : ''} · {totalQuestions} question{totalQuestions !== 1 ? 's' : ''}</p>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <p className="text-xs font-mono text-indigo-400 uppercase tracking-widest mb-1">Instructor</p>
+              <h1 className="text-2xl font-bold text-white">Welcome back, {teacher.name.split(' ')[0]}</h1>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {modules.length} module{modules.length !== 1 ? 's' : ''} · {classes.length} class{classes.length !== 1 ? 'es' : ''} · {totalQuestions} question{totalQuestions !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 text-xs font-mono">
+                <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300">{modules.length} modules</span>
+                <span className="px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-300">{classes.length} classes</span>
+                <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300">{totalQuestions} Qs</span>
+              </div>
+            </div>
           </div>
-          <Button
-            onClick={() => {
-              setShowEditor((v) => !v);
-              setEditingModuleId(null);
-              setEditingModuleData(null);
-            }}
-          >
-            {showEditor ? '✕ Cancel' : '+ New Module'}
-          </Button>
         </motion.div>
 
-        {/* Create Module Panel */}
-        <AnimatePresence>
-          {showEditor && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
+        {/* ─── Tab navigation ────────────────────────────────────────────────── */}
+        <div className="flex gap-1 rounded-xl bg-gray-900/60 border border-white/5 p-1">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id);
+                // Close open panels when switching tabs
+                if (tab.id !== 'modules') { setShowEditor(false); setEditingModuleId(null); setEditingModuleData(null); }
+                if (tab.id !== 'classes') { setAnalytics(null); }
+              }}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                activeTab === tab.id
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+              }`}
             >
-              <Card title="Create New Module" variant="highlight">
-                <ModuleEditor
-                  teacherId={teacher.id}
-                  onSaved={() => {
-                    setShowEditor(false);
-                    loadData();
-                  }}
-                />
-              </Card>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {[
-            { label: 'My Modules',  value: modules.length,  icon: '📚', color: 'text-indigo-400', border: 'border-indigo-500/20', bg: 'bg-indigo-500/5' },
-            { label: 'My Classes',  value: classes.length,  icon: '🏫', color: 'text-cyan-400',   border: 'border-cyan-500/20',   bg: 'bg-cyan-500/5'   },
-            { label: 'Questions',   value: totalQuestions,  icon: '❓', color: 'text-amber-400',  border: 'border-amber-500/20',  bg: 'bg-amber-500/5'  },
-          ].map(({ label, value, icon, color, border, bg }) => (
-            <div key={label} className={`rounded-xl border ${border} ${bg} p-4 text-center`}>
-              <p className="text-xl mb-1" aria-hidden="true">{icon}</p>
-              <p className={`text-2xl font-bold ${color}`}>{value}</p>
-              <p className="text-xs text-gray-500">{label}</p>
-            </div>
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
           ))}
         </div>
 
-        {/* Modules list */}
-        <section aria-labelledby="my-modules-heading">
-          <h2 id="my-modules-heading" className="text-sm font-semibold text-white mb-3">My Modules</h2>
-          {modules.length === 0 ? (
-            <p className="text-sm text-gray-600">No modules yet. Create your first module above.</p>
-          ) : (
-            <div className="space-y-2">
-              {modules.map((mod) => (
-                <div
-                  key={mod.module_id}
-                  className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-gray-900/40 px-4 py-3"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{mod.module_name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs font-mono text-gray-600 uppercase">{mod.module_type}</span>
-                      {mod.exp_bonus_percent > 0 && (
-                        <span className="text-xs text-green-400">+{mod.exp_bonus_percent}% EXP</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs text-gray-600">
-                      {new Date(mod.created_at).toLocaleDateString()}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      loading={editLoadingId === mod.module_id}
-                      onClick={() => handleEditModule(mod.module_id)}
-                    >
-                      Edit
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Edit Module Panel */}
-        <AnimatePresence>
-          {editingModuleId && editingModuleData && (
+        {/* ══════════════════════════════════════════════════════════════════════
+            TAB: MODULES
+        ══════════════════════════════════════════════════════════════════════ */}
+        <AnimatePresence mode="wait">
+          {activeTab === 'modules' && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
+              key="tab-modules"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18 }}
+              className="space-y-5"
             >
-              <Card
-                title={`Editing: ${editingModuleData.module_name}`}
-                variant="highlight"
-                action={
-                  <button
-                    onClick={() => { setEditingModuleId(null); setEditingModuleData(null); }}
-                    className="text-xs text-gray-500 hover:text-white transition-colors px-2 py-1"
-                    aria-label="Close editor"
-                  >
-                    ✕ Close
-                  </button>
-                }
-              >
-                <ModuleEditor
-                  teacherId={teacher.id}
-                  editModuleId={editingModuleId}
-                  initialData={editingModuleData}
-                  onSaved={() => {
+              {/* New Module button */}
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => {
+                    setShowEditor((v) => !v);
                     setEditingModuleId(null);
                     setEditingModuleData(null);
-                    loadData();
                   }}
-                />
-              </Card>
+                >
+                  {showEditor ? '✕ Cancel' : '+ New Module'}
+                </Button>
+              </div>
+
+              {/* Create Module Panel */}
+              <AnimatePresence>
+                {showEditor && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <Card title="Create New Module" variant="highlight">
+                      <ModuleEditor
+                        teacherId={teacher.id}
+                        onSaved={() => {
+                          setShowEditor(false);
+                          loadData();
+                        }}
+                      />
+                    </Card>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Edit Module Panel */}
+              <AnimatePresence>
+                {editingModuleId && editingModuleData && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <Card
+                      title={`Editing: ${editingModuleData.module_name}`}
+                      variant="highlight"
+                      action={
+                        <button
+                          onClick={() => { setEditingModuleId(null); setEditingModuleData(null); }}
+                          className="text-xs text-gray-500 hover:text-white transition-colors px-2 py-1"
+                          aria-label="Close editor"
+                        >
+                          ✕ Close
+                        </button>
+                      }
+                    >
+                      <ModuleEditor
+                        teacherId={teacher.id}
+                        editModuleId={editingModuleId}
+                        initialData={editingModuleData}
+                        onSaved={() => {
+                          setEditingModuleId(null);
+                          setEditingModuleData(null);
+                          loadData();
+                        }}
+                      />
+                    </Card>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Modules list */}
+              <section aria-labelledby="my-modules-heading">
+                <h2 id="my-modules-heading" className="text-xs font-mono text-gray-600 uppercase tracking-widest mb-3">
+                  Your Modules
+                </h2>
+                {modules.length === 0 ? (
+                  <div className="rounded-xl border border-white/5 bg-gray-900/30 px-5 py-8 text-center">
+                    <p className="text-sm text-gray-500">No modules yet.</p>
+                    <p className="text-xs text-gray-600 mt-1">Click &ldquo;+ New Module&rdquo; to create your first one.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {modules.map((mod, i) => (
+                      <motion.div
+                        key={mod.module_id}
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.04 }}
+                        className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-gray-900/40 hover:bg-gray-900/60 px-4 py-3 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <span className="text-lg flex-shrink-0">{mod.module_type === 'core' ? '🏛️' : '📝'}</span>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">{mod.module_name}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[10px] font-mono text-gray-600 uppercase">{mod.module_type}</span>
+                              {mod.exp_bonus_percent > 0 && (
+                                <span className="text-[10px] text-green-400">+{mod.exp_bonus_percent}% EXP</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs text-gray-600 hidden sm:block">
+                            {new Date(mod.created_at).toLocaleDateString()}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            loading={editLoadingId === mod.module_id}
+                            onClick={() => handleEditModule(mod.module_id)}
+                          >
+                            Edit
+                          </Button>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </motion.div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════
+              TAB: CLASSES
+          ══════════════════════════════════════════════════════════════════════ */}
+          {activeTab === 'classes' && (
+            <motion.div
+              key="tab-classes"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18 }}
+              className="space-y-5"
+            >
+              {/* Create Class Form */}
+              <div className="rounded-xl border border-white/5 bg-gray-900/40 px-5 py-4 space-y-3">
+                <p className="text-xs font-mono text-gray-600 uppercase tracking-widest">Create New Class</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newClassName}
+                    onChange={(e) => setNewClassName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleCreateClass(); }}
+                    placeholder="e.g. Cyber Ninjas — Period 3"
+                    maxLength={80}
+                    className="flex-1 rounded-lg bg-gray-800 border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-indigo-500 placeholder-gray-600"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleCreateClass}
+                    loading={creatingClass}
+                    disabled={!newClassName.trim()}
+                  >
+                    + Create
+                  </Button>
+                </div>
+                {classError && <p className="text-xs text-red-400">{classError}</p>}
+              </div>
+
+              {/* Classes list */}
+              <section aria-labelledby="classes-heading">
+                <h2 id="classes-heading" className="text-xs font-mono text-gray-600 uppercase tracking-widest mb-3">
+                  Your Classes
+                </h2>
+                {classes.length === 0 ? (
+                  <div className="rounded-xl border border-white/5 bg-gray-900/30 px-5 py-8 text-center">
+                    <p className="text-sm text-gray-500">No classes yet.</p>
+                    <p className="text-xs text-gray-600 mt-1">Create one above so students can request to enroll.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {classes.map((cls) => (
+                      <Card key={cls.class_id} title={cls.class_name} action={
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-gray-500 flex-shrink-0">
+                            {cls.student_count} student{cls.student_count !== 1 ? 's' : ''}
+                          </span>
+                          <Button size="sm" variant="secondary" onClick={() => handleOpenStudents(cls.class_id)}>
+                            {studentsClassId === cls.class_id ? 'Hide Students' : 'Students'}
+                          </Button>
+                          <Button size="sm" variant="secondary" onClick={() => handleOpenModuleMgmt(cls.class_id)}>
+                            {managingClassId === cls.class_id ? 'Hide Modules' : 'Modules'}
+                          </Button>
+                          <Button size="sm" variant="secondary" onClick={() => loadAnalytics(cls.class_id)} loading={analyticsLoading}>
+                            Analytics
+                          </Button>
+                          <button
+                            onClick={() => handleDeleteClass(cls.class_id)}
+                            disabled={deletingClassId === cls.class_id}
+                            className="text-xs text-gray-600 hover:text-red-400 transition-colors px-2 py-1 disabled:opacity-50"
+                            aria-label={`Delete class ${cls.class_name}`}
+                          >
+                            {deletingClassId === cls.class_id ? '…' : '✕'}
+                          </button>
+                        </div>
+                      }>
+                        <p className="text-xs text-gray-600">
+                          Created {new Date(cls.created_at).toLocaleDateString()}
+                        </p>
+
+                        {/* Student enrollment panel */}
+                        <AnimatePresence>
+                          {studentsClassId === cls.class_id && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="mt-3 pt-3 border-t border-white/5">
+                                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                                  Enrolled Students
+                                </p>
+                                {studentsLoading ? (
+                                  <p className="text-xs text-gray-600">Loading…</p>
+                                ) : (classStudentsMap[cls.class_id] ?? []).length === 0 ? (
+                                  <p className="text-xs text-gray-600">No students enrolled yet.</p>
+                                ) : (
+                                  <div className="space-y-1">
+                                    {(classStudentsMap[cls.class_id] ?? []).map((s) => (
+                                      <div key={s.student_id} className="flex items-center justify-between gap-2 rounded-lg bg-gray-800/60 px-3 py-2">
+                                        <div className="min-w-0">
+                                          <p className="text-xs text-gray-300 truncate font-medium">{s.name}</p>
+                                          <p className="text-[10px] text-gray-600 truncate">{s.email} · Lv.{s.level} · {s.total_exp} XP</p>
+                                        </div>
+                                        <button
+                                          onClick={() => handleDropStudent(cls.class_id, s.student_id)}
+                                          disabled={droppingStudentId === s.student_id}
+                                          className="text-xs text-gray-600 hover:text-red-400 transition-colors flex-shrink-0 disabled:opacity-50"
+                                          title="Remove from class"
+                                        >
+                                          {droppingStudentId === s.student_id ? '…' : '✕ Remove'}
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        {/* Module assignment panel */}
+                        <AnimatePresence>
+                          {managingClassId === cls.class_id && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="mt-3 pt-3 border-t border-white/5">
+                                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                                  Assigned Modules
+                                </p>
+                                {moduleMgmtLoading ? (
+                                  <p className="text-xs text-gray-600">Loading…</p>
+                                ) : (classModulesMap[cls.class_id] ?? []).length === 0 ? (
+                                  <p className="text-xs text-gray-600 mb-3">No modules assigned yet.</p>
+                                ) : (
+                                  <div className="space-y-1 mb-3">
+                                    {(classModulesMap[cls.class_id] ?? []).map((mod) => (
+                                      <div
+                                        key={mod.module_id}
+                                        className="flex items-center justify-between gap-2 rounded-lg bg-gray-800/60 px-3 py-1.5"
+                                      >
+                                        <span className="text-xs text-gray-300 truncate">{mod.module_name}</span>
+                                        <button
+                                          onClick={() => handleUnassignModule(cls.class_id, mod.module_id)}
+                                          className="text-xs text-gray-600 hover:text-red-400 transition-colors flex-shrink-0"
+                                          title="Remove from class"
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {(() => {
+                                  const assignedIds = new Set((classModulesMap[cls.class_id] ?? []).map((m) => m.module_id));
+                                  const unassigned = modules.filter((m) => !assignedIds.has(m.module_id));
+                                  if (unassigned.length === 0) {
+                                    return <p className="text-xs text-gray-600">All your modules are assigned to this class.</p>;
+                                  }
+                                  return (
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <select
+                                        value={addModuleSelections[cls.class_id] ?? ''}
+                                        onChange={(e) =>
+                                          setAddModuleSelections((prev) => ({ ...prev, [cls.class_id]: e.target.value }))
+                                        }
+                                        className="flex-1 text-xs rounded-lg bg-gray-800 border border-white/10 text-white px-2 py-1.5 focus:outline-none focus:border-indigo-500"
+                                      >
+                                        <option value="">Select module…</option>
+                                        {unassigned.map((m) => (
+                                          <option key={m.module_id} value={m.module_id}>{m.module_name}</option>
+                                        ))}
+                                      </select>
+                                      <Button
+                                        size="sm"
+                                        disabled={!addModuleSelections[cls.class_id]}
+                                        onClick={() => handleAssignModule(cls.class_id)}
+                                      >
+                                        + Assign
+                                      </Button>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Analytics results (shown inline in Classes tab) */}
+              <AnimatePresence>
+                {analytics && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                  >
+                    <Card
+                      title="Class Analytics"
+                      variant="highlight"
+                      action={
+                        <button
+                          onClick={() => setAnalytics(null)}
+                          className="text-xs text-gray-500 hover:text-white transition-colors px-2 py-1"
+                          aria-label="Close analytics"
+                        >
+                          ✕ Close
+                        </button>
+                      }
+                    >
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                        {[
+                          { label: 'Students',     value: String(analytics.totalStudents) },
+                          { label: 'Sessions',     value: String(analytics.completedSessions) },
+                          { label: 'Avg Score',    value: String(analytics.avgScore) },
+                          { label: 'Avg Accuracy', value: `${analytics.avgAccuracy}%` },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="text-center rounded-lg bg-gray-800/60 p-3">
+                            <p className="text-lg font-bold text-white">{value}</p>
+                            <p className="text-xs text-gray-500">{label}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {Array.isArray(analytics.weakQuestions) && analytics.weakQuestions.length > 0 && (
+                        <div>
+                          <h4 className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wide">Weakest Questions</h4>
+                          <div className="space-y-1.5">
+                            {(analytics.weakQuestions as Array<{ question_text: string; accuracy_pct: number }>).map((q, i) => (
+                              <div key={i} className="flex items-center justify-between gap-3 rounded-lg bg-gray-800/40 px-3 py-2">
+                                <p className="text-xs text-gray-300 truncate flex-1">{q.question_text}</p>
+                                <span className="text-xs font-semibold text-red-400 flex-shrink-0">{q.accuracy_pct}%</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </Card>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════
+              TAB: ASSIGNMENTS
+          ══════════════════════════════════════════════════════════════════════ */}
+          {activeTab === 'assignments' && (
+            <motion.div
+              key="tab-assignments"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18 }}
+            >
+              <AssignmentManager
+                teacherId={teacher.id}
+                modules={modules}
+              />
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Classes & Analytics */}
-        <section aria-labelledby="classes-heading">
-          <div className="flex items-center justify-between mb-3">
-            <h2 id="classes-heading" className="text-sm font-semibold text-white">My Classes</h2>
-          </div>
-
-          {/* Create Class Form */}
-          <div className="flex items-center gap-2 mb-4">
-            <input
-              type="text"
-              value={newClassName}
-              onChange={(e) => setNewClassName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleCreateClass(); }}
-              placeholder="New class name…"
-              maxLength={80}
-              className="flex-1 rounded-lg bg-gray-800 border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-cyan-500 placeholder-gray-600"
-            />
-            <Button
-              size="sm"
-              onClick={handleCreateClass}
-              loading={creatingClass}
-              disabled={!newClassName.trim()}
-            >
-              + Create Class
-            </Button>
-          </div>
-          {classError && <p className="text-xs text-red-400 mb-3">{classError}</p>}
-
-          {classes.length === 0 ? (
-            <p className="text-sm text-gray-600">No classes yet. Create one above so students can enroll.</p>
-          ) : (
-            <div className="space-y-3">
-              {classes.map((cls) => (
-                <Card key={cls.class_id} title={cls.class_name} action={
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 flex-shrink-0">
-                      {cls.student_count} student{cls.student_count !== 1 ? 's' : ''}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => handleOpenModuleMgmt(cls.class_id)}
-                    >
-                      {managingClassId === cls.class_id ? 'Hide Modules' : 'Modules'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => handleOpenStudents(cls.class_id)}
-                    >
-                      {studentsClassId === cls.class_id ? 'Hide Students' : 'Students'}
-                    </Button>
-                    <Button size="sm" variant="secondary" onClick={() => loadAnalytics(cls.class_id)} loading={analyticsLoading}>
-                      Analytics
-                    </Button>
-                    <button
-                      onClick={() => handleDeleteClass(cls.class_id)}
-                      disabled={deletingClassId === cls.class_id}
-                      className="text-xs text-gray-600 hover:text-red-400 transition-colors px-2 py-1 disabled:opacity-50"
-                      aria-label={`Delete class ${cls.class_name}`}
-                    >
-                      {deletingClassId === cls.class_id ? '…' : '✕'}
-                    </button>
-                  </div>
-                }>
-                  <p className="text-xs text-gray-600">
-                    Created {new Date(cls.created_at).toLocaleDateString()}
-                  </p>
-
-                  {/* Student enrollment panel */}
-                  {studentsClassId === cls.class_id && (
-                    <div className="mt-3 pt-3 border-t border-white/5">
-                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
-                        Enrolled Students
-                      </p>
-                      {studentsLoading ? (
-                        <p className="text-xs text-gray-600">Loading…</p>
-                      ) : (classStudentsMap[cls.class_id] ?? []).length === 0 ? (
-                        <p className="text-xs text-gray-600">No students enrolled yet.</p>
-                      ) : (
-                        <div className="space-y-1">
-                          {(classStudentsMap[cls.class_id] ?? []).map((s) => (
-                            <div key={s.student_id} className="flex items-center justify-between gap-2 rounded-lg bg-gray-800/60 px-3 py-2">
-                              <div className="min-w-0">
-                                <p className="text-xs text-gray-300 truncate font-medium">{s.name}</p>
-                                <p className="text-[10px] text-gray-600 truncate">{s.email} · Lv.{s.level} · {s.total_exp} XP</p>
-                              </div>
-                              <button
-                                onClick={() => handleDropStudent(cls.class_id, s.student_id)}
-                                disabled={droppingStudentId === s.student_id}
-                                className="text-xs text-gray-600 hover:text-red-400 transition-colors flex-shrink-0 disabled:opacity-50"
-                                title="Remove from class"
-                              >
-                                {droppingStudentId === s.student_id ? '…' : '✕ Remove'}
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Module assignment panel */}
-                  {managingClassId === cls.class_id && (
-                    <div className="mt-3 pt-3 border-t border-white/5">
-                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
-                        Assigned Modules
-                      </p>
-                      {moduleMgmtLoading ? (
-                        <p className="text-xs text-gray-600">Loading…</p>
-                      ) : (classModulesMap[cls.class_id] ?? []).length === 0 ? (
-                        <p className="text-xs text-gray-600 mb-3">No modules assigned yet.</p>
-                      ) : (
-                        <div className="space-y-1 mb-3">
-                          {(classModulesMap[cls.class_id] ?? []).map((mod) => (
-                            <div
-                              key={mod.module_id}
-                              className="flex items-center justify-between gap-2 rounded-lg bg-gray-800/60 px-3 py-1.5"
-                            >
-                              <span className="text-xs text-gray-300 truncate">{mod.module_name}</span>
-                              <button
-                                onClick={() => handleUnassignModule(cls.class_id, mod.module_id)}
-                                className="text-xs text-gray-600 hover:text-red-400 transition-colors flex-shrink-0"
-                                title="Remove from class"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Add module selector */}
-                      {(() => {
-                        const assignedIds = new Set((classModulesMap[cls.class_id] ?? []).map((m) => m.module_id));
-                        const unassigned = modules.filter((m) => !assignedIds.has(m.module_id));
-                        if (unassigned.length === 0) {
-                          return (
-                            <p className="text-xs text-gray-600">All your modules are assigned to this class.</p>
-                          );
-                        }
-                        return (
-                          <div className="flex items-center gap-2 mt-1">
-                            <select
-                              value={addModuleSelections[cls.class_id] ?? ''}
-                              onChange={(e) =>
-                                setAddModuleSelections((prev) => ({ ...prev, [cls.class_id]: e.target.value }))
-                              }
-                              className="flex-1 text-xs rounded-lg bg-gray-800 border border-white/10 text-white px-2 py-1.5 focus:outline-none focus:border-cyan-500"
-                            >
-                              <option value="">Select module…</option>
-                              {unassigned.map((m) => (
-                                <option key={m.module_id} value={m.module_id}>{m.module_name}</option>
-                              ))}
-                            </select>
-                            <Button
-                              size="sm"
-                              disabled={!addModuleSelections[cls.class_id]}
-                              onClick={() => handleAssignModule(cls.class_id)}
-                            >
-                              + Assign
-                            </Button>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-                </Card>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Assignments */}
-        <section aria-labelledby="assignments-heading">
-          <AssignmentManager
-            teacherId={teacher.id}
-            modules={modules}
-          />
-        </section>
-
-        {/* Analytics results */}
-        <AnimatePresence>
-          {analytics && (
-            <motion.section
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              aria-labelledby="analytics-heading"
-            >
-              <Card
-                title="Class Analytics"
-                variant="highlight"
-                action={
-                  <button
-                    onClick={() => setAnalytics(null)}
-                    className="text-xs text-gray-500 hover:text-white transition-colors px-2 py-1"
-                    aria-label="Close analytics"
-                  >
-                    ✕ Close
-                  </button>
-                }
-              >
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                  {[
-                    { label: 'Students', value: String(analytics.totalStudents) },
-                    { label: 'Sessions', value: String(analytics.completedSessions) },
-                    { label: 'Avg Score', value: String(analytics.avgScore) },
-                    { label: 'Avg Accuracy', value: `${analytics.avgAccuracy}%` },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="text-center rounded-lg bg-gray-800/60 p-3">
-                      <p className="text-lg font-bold text-white">{value}</p>
-                      <p className="text-xs text-gray-500">{label}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {Array.isArray(analytics.weakQuestions) && analytics.weakQuestions.length > 0 && (
-                  <div>
-                    <h4 className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wide">
-                      Weakest Questions
-                    </h4>
-                    <div className="space-y-1.5">
-                      {(analytics.weakQuestions as Array<{ question_text: string; accuracy_pct: number }>).map((q, i) => (
-                        <div key={i} className="flex items-center justify-between gap-3 rounded-lg bg-gray-800/40 px-3 py-2">
-                          <p className="text-xs text-gray-300 truncate flex-1">{q.question_text}</p>
-                          <span className="text-xs font-semibold text-red-400 flex-shrink-0">
-                            {q.accuracy_pct}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </Card>
-            </motion.section>
-          )}
-        </AnimatePresence>
       </main>
 
       <Footer />

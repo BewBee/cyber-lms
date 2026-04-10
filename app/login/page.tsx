@@ -15,6 +15,7 @@ import { motion } from 'framer-motion';
 import { browserSupabase as supabase } from '@/lib/browserClient';
 import { Button } from '@/components/ui/Button';
 import { Footer } from '@/components/ui/Footer';
+import { TerminalRain } from '@/components/game/TerminalRain';
 
 const DEV_CREDENTIALS: Record<string, { email: string; redirect: string }> = {
   admin:   { email: 'dev-admin@cybershield.dev',   redirect: '/admin/dashboard'   },
@@ -106,6 +107,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
+      <TerminalRain className="opacity-50" />
       <div className="flex flex-1 items-center justify-center px-4 py-16">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -115,21 +117,22 @@ export default function LoginPage() {
         >
           {/* Logo */}
           <Link href="/" className="flex items-center justify-center gap-2 mb-8">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500 text-black font-bold text-lg">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500/20 border border-green-500/40 text-green-400 font-mono font-bold text-lg">
               CS
             </span>
-            <span className="text-lg font-bold text-white">CyberShield</span>
+            <span className="text-lg font-mono font-bold text-green-500 tracking-widest">CYBERSHIELD</span>
           </Link>
 
           {/* Card */}
-          <div className="rounded-2xl border border-white/8 bg-gray-900/80 backdrop-blur-sm p-8">
-            <h1 className="text-xl font-bold text-white mb-1 text-center">Sign in</h1>
-            <p className="text-xs text-gray-500 text-center mb-6">Enter your credentials to access your account</p>
+          <div className="rounded-2xl border border-green-500/15 bg-gray-950/90 backdrop-blur-sm p-8">
+            <p className="text-xs font-mono text-green-700 text-center mb-1 tracking-widest">// SECURE TERMINAL //</p>
+            <h1 className="text-xl font-bold text-white mb-1 text-center">Authenticate</h1>
+            <p className="text-xs text-gray-600 text-center mb-6 font-mono">Identity verification required to proceed</p>
 
             <form onSubmit={handleLogin} className="space-y-4" noValidate>
               <div>
-                <label htmlFor="email" className="block text-xs text-gray-400 mb-1.5">
-                  Email address
+                <label htmlFor="email" className="block text-xs font-mono text-green-700 mb-1.5 tracking-wider">
+                  &gt; OPERATOR_ID
                 </label>
                 <input
                   id="email"
@@ -139,13 +142,13 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="w-full rounded-lg bg-gray-800 border border-white/10 text-white text-sm px-3 py-2.5 focus:outline-none focus:border-cyan-500 placeholder-gray-600"
+                  className="w-full rounded-lg bg-black/60 border border-green-500/20 text-green-300 font-mono text-sm px-3 py-2.5 focus:outline-none focus:border-green-500/60 placeholder-green-900"
                 />
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-xs text-gray-400 mb-1.5">
-                  Password
+                <label htmlFor="password" className="block text-xs font-mono text-green-700 mb-1.5 tracking-wider">
+                  &gt; ACCESS_KEY
                 </label>
                 <input
                   id="password"
@@ -155,7 +158,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full rounded-lg bg-gray-800 border border-white/10 text-white text-sm px-3 py-2.5 focus:outline-none focus:border-cyan-500 placeholder-gray-600"
+                  className="w-full rounded-lg bg-black/60 border border-green-500/20 text-green-300 font-mono text-sm px-3 py-2.5 focus:outline-none focus:border-green-500/60 placeholder-green-900"
                 />
               </div>
 

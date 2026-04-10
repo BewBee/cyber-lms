@@ -1,37 +1,20 @@
 /**
  * lib/supabaseClient.ts — Supabase client factory for CyberShield LMS.
- * Exports a browser-safe anon client and a server-only service-role client.
- * To test: import { supabase } from '@/lib/supabaseClient' and call supabase.from('users').select('*').limit(1).
  *
- * SECURITY NOTE:
- *  - supabase (anon client): safe to use client-side; Row Level Security (RLS) enforced by Supabase.
- *  - getServiceClient(): uses SUPABASE_SERVICE_KEY which bypasses RLS.
- *    ONLY call getServiceClient() inside Next.js API routes (server-side). Never expose it to the browser.
- *
- * DEV STUB: If env vars are missing, the client is created with empty strings.
- *   Supabase calls will fail gracefully — you will see console warnings, but the app will not crash.
- *   Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local to enable DB features.
+ * SECURITY:
+ *  - supabase (anon client): safe to use client-side; Row Level Security (RLS) enforced.
+ *  - getServiceClient(): uses SUPABASE_SERVICE_ROLE_KEY which bypasses RLS.
+ *    ONLY call getServiceClient() inside Next.js API routes. Never expose it to the browser.
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Use placeholder fallbacks so createClient never throws at module load time
-// (e.g. during Vercel build-time static analysis when env vars aren't injected yet).
-// Actual DB calls will still fail at runtime if real env vars are missing.
-const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
-if (
-  supabaseUrl === 'https://placeholder.supabase.co' ||
-  supabaseAnonKey === 'placeholder-anon-key'
-) {
+if (supabaseUrl === 'https://placeholder.supabase.co' || supabaseAnonKey === 'placeholder-anon-key') {
   if (typeof window !== 'undefined') {
-    console.warn(
-      '[CyberShield] Supabase env vars not set. DB features disabled. ' +
-        'Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local'
-    );
+    console.warn('[CyberShield] Supabase env vars not set. Add them to .env.local to enable DB features.');
   }
 }
 
@@ -46,15 +29,14 @@ export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKe
 /**
  * Server-only Supabase client using the service role key.
  * Bypasses RLS — use ONLY in server-side API routes.
- * Never call this function from client components.
  */
 export function getServiceClient(): SupabaseClient {
-  const serviceKey = process.env.SUPABASE_SERVICE_KEY ?? '';
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || '';
+
   if (!serviceKey) {
-    console.error(
-      '[CyberShield] SUPABASE_SERVICE_KEY is not set. Server operations will fail.'
-    );
+    console.error('[CyberShield] SUPABASE_SERVICE_ROLE_KEY is not set. Server operations will fail.');
   }
+
   return createClient(supabaseUrl, serviceKey, {
     auth: {
       persistSession: false,

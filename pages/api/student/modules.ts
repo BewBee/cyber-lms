@@ -3,7 +3,7 @@
  * GET /api/student/modules?studentId=
  *
  * Returns:
- *   - All unlocked core modules (always visible to every student)
+ *   - Core modules that are assigned to an unlocked campaign chapter (admin-curated)
  *   - Teacher modules only for classes the student has an approved enrollment in
  *
  * Each module in the response carries class_id / class_name (null for core modules).
@@ -22,15 +22,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!isValidUUID(studentId)) return err(res, 'Invalid studentId', 400);
 
-  // ─── 1. Core modules — always visible ───────────────────────────────────────
-  const { data: coreModules, error: coreErr } = await supabase
-    .from('modules')
-    .select('module_id, module_name, description, module_type, is_locked, exp_bonus_percent, created_by, created_at')
-    .eq('module_type', 'core')
-    .eq('is_locked', false)
-    .order('created_at');
+  // ─── 1. Core modules — only those assigned to an unlocked campaign chapter ──
+  // Unassigned core modules are admin drafts and must not be student-visible.
+  const { data: campaignMissions, error: coreErr } = await supabase
+    .from('chapter_missions')
+    .select('module_id, chapters!inner(is_unlocked, is_coming_soon)')
+    .eq('chapters.is_unlocked', true)
+    .eq('chapters.is_coming_soon', false);
 
-  if (coreErr) return err(res, 'Failed to fetch core modules', 500);
+  if (coreErr) return err(res, 'Failed to fetch campaign missions', 500);
+
+  const assignedModuleIds = [...new Set(
+    (campaignMissions ?? []).map((r: Record<string, unknown>) => r.module_id as string)
+  )];
+
+  const { data: coreModules } = assignedModuleIds.length > 0
+    ? await supabase
+        .from('modules')
+        .select('module_id, module_name, description, module_type, is_locked, exp_bonus_percent, created_by, created_at')
+        .eq('module_type', 'core')
+        .eq('is_locked', false)
+        .in('module_id', assignedModuleIds)
+        .order('created_at')
+    : { data: [] };
 
   // ─── 2. Student's approved enrollments ──────────────────────────────────────
   const { data: enrollments } = await supabase

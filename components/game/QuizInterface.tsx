@@ -14,6 +14,8 @@ import { ExpBar } from './ExpBar';
 import { StreakCounter } from './StreakCounter';
 import { MedalReveal } from './MedalReveal';
 import { QuizMascot, type MascotMood } from './QuizMascot';
+import { PixelMascot, type PixelMood } from './PixelMascot';
+import { LevelUpBurst } from './LevelUpBurst';
 import { BossIntro } from './BossIntro';
 import { RewardChest, type ChestTier } from './RewardChest';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
@@ -21,12 +23,13 @@ import { Button } from '@/components/ui/Button';
 import { shuffleOptions, selectQuestions } from '@/lib/quizEngine';
 import { calculateRank } from '@/lib/expSystem';
 import { playSound, isSoundEnabled, toggleSound } from '@/lib/sounds';
+import { setStreakLayer } from '@/lib/soundtrack';
 import type { StudentQuestion, QuestionOption, GameResult, AttemptAnswer } from '@/types';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 type Phase = 'loading' | 'boss_intro' | 'decrypt' | 'answering' | 'feedback' | 'chest' | 'results';
-export type PowerupType = 'fifty_fifty' | 'shield' | 'skip';
+export type PowerupType = 'fifty_fifty' | 'shield' | 'skip' | 'packet_sniffer';
 
 interface Powerup {
   powerup_type: PowerupType;
@@ -84,9 +87,10 @@ function optionClass(
 // ─── Power-up config ──────────────────────────────────────────────────────────
 
 const POWERUP_CONFIG: Record<PowerupType, { icon: string; label: string; title: string }> = {
-  fifty_fifty: { icon: '🎯', label: '50/50',  title: 'Eliminate 2 wrong answers' },
-  shield:       { icon: '🛡',  label: 'Shield', title: 'Block the next wrong answer — no life lost' },
-  skip:         { icon: '⏭',  label: 'Skip',   title: 'Skip this question, no penalty' },
+  fifty_fifty:   { icon: '🎯', label: 'NMAP',    title: 'Eliminate 2 wrong answers' },
+  shield:        { icon: '🛡',  label: 'FW.EXE',  title: 'Block the next wrong answer — no life lost' },
+  skip:          { icon: '⏭',  label: 'EXPLOIT', title: 'Skip this question, no penalty' },
+  packet_sniffer:{ icon: '📡', label: 'PKT SNF', title: 'Next wrong answer won\'t break your streak' },
 };
 
 // ─── Component ─────────────────────────────────────────────────────────────────
@@ -142,14 +146,23 @@ export function QuizInterface({
   const [bossHit, setBossHit]   = useState(false);
 
   // ── Power-ups ────────────────────────────────────────────────────────────────
-  const [powerups, setPowerups]               = useState<Powerup[]>([]);
-  const [shieldActive, setShieldActive]       = useState(false);
-  const [shieldBlocked, setShieldBlocked]     = useState(false);
+  const [powerups, setPowerups]                   = useState<Powerup[]>([]);
+  const [shieldActive, setShieldActive]           = useState(false);
+  const [shieldBlocked, setShieldBlocked]         = useState(false);
+  const [streakFreezeActive, setStreakFreezeActive] = useState(false);
+  const [streakFrozen, setStreakFrozen]           = useState(false);
   const [eliminatedOptions, setEliminatedOptions] = useState<string[]>([]);
-  const [powerupMsg, setPowerupMsg]           = useState<string | null>(null);
+  const [powerupMsg, setPowerupMsg]               = useState<string | null>(null);
+
+  // ── Combo tier (derived from streak, tracked to fire combo_up sound on tier change) ──
+  const prevComboTierRef = useRef(0);
 
   // ── Chest + badges ───────────────────────────────────────────────────────────
   const [badgesEarned, setBadgesEarned] = useState<string[]>([]);
+
+  // ── Level-up burst ───────────────────────────────────────────────────────────
+  const [levelUpInfo, setLevelUpInfo] = useState<{ level: number; rank: string } | null>(null);
+  const [showLevelUp, setShowLevelUp] = useState(false);
 
   // ── XP particles ─────────────────────────────────────────────────────────────
   const [xpParticles, setXpParticles] = useState<{ id: number; x: number }[]>([]);
@@ -267,6 +280,9 @@ export function QuizInterface({
       setGameResult(result);
       setCurrentExp(result.newTotalExp);
       setCurrentLevel(result.newLevel);
+      if (result.newLevel > initialLevel) {
+        setLevelUpInfo({ level: result.newLevel, rank: result.rankName ?? calculateRank(result.newLevel) });
+      }
       setBadgesEarned(data.badgesEarned ?? []);
       setPhase('chest'); // show reward chest before results
       onComplete?.(result);
@@ -312,13 +328,24 @@ export function QuizInterface({
           setFeedbackCorrectKey(correctOpt?.option_key ?? null);
           if (serverQ.explanation) setExplanation(serverQ.explanation);
 
-          const newStreak = isCorrect ? streak + 1 : 0;
+          // Streak: freeze preserves streak on wrong answer
+          const newStreak = isCorrect
+            ? streak + 1
+            : streakFreezeActive ? streak : 0;
           setStreak(newStreak);
           setMaxStreak((prev) => Math.max(prev, newStreak));
           newAttempt.streakAtAttempt = newStreak;
 
+          // Combo tier (0=none, 1=1.5×, 2=2×)
+          const newComboTier = newStreak < 3 ? 0 : newStreak < 6 ? 1 : 2;
+          if (isCorrect && newComboTier > prevComboTierRef.current) {
+            playSound('combo_up', Math.min(newStreak / 10, 1));
+          }
+          prevComboTierRef.current = newComboTier;
+
           if (isCorrect) {
-            playSound('correct');
+            const intensity = Math.min(newStreak / 10, 1);
+            playSound('correct', intensity);
             // +XP particle
             const id = ++particleId.current;
             setXpParticles((p) => [...p, { id, x: Math.random() * 60 - 30 }]);
@@ -329,21 +356,32 @@ export function QuizInterface({
               setBossHp((hp) => Math.max(0, hp - dmg));
               setBossHit(true);
               setTimeout(() => setBossHit(false), 500);
-              playSound('boss_hit');
+              playSound('boss_hit', 1);
             }
           } else {
+            // Streak freeze consumed (still may lose life below)
+            if (streakFreezeActive) {
+              setStreakFreezeActive(false);
+              setStreakFrozen(true);
+              setTimeout(() => setStreakFrozen(false), 1400);
+              playSound('shield_block', 0.6);
+            }
             // Shield blocks life loss
             if (shieldActive) {
               setShieldActive(false);
               setShieldBlocked(true);
               setTimeout(() => setShieldBlocked(false), 1200);
-              playSound('shield_block');
+              playSound('shield_block', 1);
             } else {
-              playSound('wrong');
+              // intensity scales with how few lives remain (more ominous at clutch)
+              const wrongIntensity = hearts <= 1 ? 1 : hearts === 2 ? 0.65 : 0.4;
+              if (streak >= 3) playSound('streak_break', wrongIntensity);
+              else playSound('wrong', wrongIntensity);
               setShakeCard(true);
               setHearts((h) => {
                 const next = h - 1;
                 if (next <= 0) setGameOver(true);
+                else if (next === 1) playSound('clutch_enter', 1);
                 return next;
               });
             }
@@ -353,7 +391,7 @@ export function QuizInterface({
     } catch { /* silent */ }
 
     setAttempts((prev) => [...prev, newAttempt]);
-  }, [phase, selectedOption, currentQ, streak, moduleId, isBoss, shieldActive, questions.length]);
+  }, [phase, selectedOption, currentQ, streak, moduleId, isBoss, shieldActive, streakFreezeActive, hearts, questions.length]);
 
   // 50/50 power-up
   const handleFiftyFifty = useCallback(async () => {
@@ -411,6 +449,28 @@ export function QuizInterface({
     setTimeout(() => setPowerupMsg(null), 2500);
   }, [shieldActive, powerups, studentId]);
 
+  // Packet Sniffer (streak freeze) power-up
+  const handleStreakFreeze = useCallback(async () => {
+    if (streakFreezeActive) return;
+    const pu = powerups.find((p) => p.powerup_type === 'packet_sniffer');
+    if (!pu || pu.quantity <= 0) return;
+
+    setStreakFreezeActive(true);
+    try {
+      await fetch(`/api/student/powerups?studentId=${studentId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ powerupType: 'packet_sniffer' }),
+      });
+    } catch { /* silent */ }
+    setPowerups((prev) => prev.map((p) =>
+      p.powerup_type === 'packet_sniffer' ? { ...p, quantity: p.quantity - 1 } : p
+    ));
+    playSound('powerup', 0.7);
+    setPowerupMsg('📡 Packet Sniffer active — next wrong answer won\'t break your streak!');
+    setTimeout(() => setPowerupMsg(null), 2800);
+  }, [streakFreezeActive, powerups, studentId]);
+
   // Skip power-up
   const handleSkip = useCallback(async () => {
     if (phase !== 'answering') return;
@@ -458,12 +518,32 @@ export function QuizInterface({
     return () => window.removeEventListener('keydown', handler);
   }, [phase, handleSelectOption, handleNext]);
 
+  // ── Sync streak tier → soundtrack layers ─────────────────────────────────────
+  useEffect(() => {
+    const tier = streak < 3 ? 0 : streak < 6 ? 1 : 2;
+    setStreakLayer(tier as 0 | 1 | 2);
+  }, [streak]);
+
   // ── Derived values ────────────────────────────────────────────────────────────
   const mascotMood: MascotMood =
     phase === 'results'  ? 'celebrating' :
     phase === 'feedback' && selectedOption === feedbackCorrectKey ? 'correct' :
     phase === 'feedback' ? 'wrong' :
     phase === 'decrypt'  ? 'thinking' : 'idle';
+
+  // BYTE pixel mascot mood — streak-aware, more granular than mascotMood
+  const pixelMood: PixelMood =
+    phase === 'results' || phase === 'chest' ? 'victory' :
+    phase === 'feedback' && selectedOption === feedbackCorrectKey ? 'correct' :
+    phase === 'feedback' ? 'wrong' :
+    streak >= 3 ? 'streak' : 'idle';
+
+  // Fire level-up burst when entering results phase after a level-up
+  useEffect(() => {
+    if (phase !== 'results' || !levelUpInfo) return;
+    const t = setTimeout(() => setShowLevelUp(true), 700);
+    return () => clearTimeout(t);
+  }, [phase, levelUpInfo]);
 
   const MAX_QUESTION_TIME = 30_000;
   const timeProgress = Math.min(timeElapsed / MAX_QUESTION_TIME, 1);
@@ -539,7 +619,7 @@ export function QuizInterface({
           className="text-center py-2"
         >
           <div className="flex justify-center mb-3">
-            <QuizMascot mood="celebrating" size={72} />
+            <PixelMascot mood="victory" pixelSize={6} />
           </div>
           {isBoss && (
             <motion.p
@@ -644,20 +724,24 @@ export function QuizInterface({
   return (
     <div className="space-y-5 max-w-2xl mx-auto relative" role="main" aria-label="Quiz session">
       {/* Floating +XP particles */}
-      {xpParticles.map((p) => (
-        <motion.div
-          key={p.id}
-          initial={{ opacity: 1, y: 0, x: p.x }}
-          animate={{ opacity: 0, y: -60, x: p.x + (Math.random() * 20 - 10) }}
-          transition={{ duration: 0.85, ease: 'easeOut' }}
-          className={`pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 z-20 text-sm font-black drop-shadow-[0_0_8px_rgba(34,211,238,0.8)] ${
-            isBoss ? 'text-red-300' : 'text-cyan-300'
-          }`}
-          aria-hidden="true"
-        >
-          +10 XP
-        </motion.div>
-      ))}
+      {(() => {
+        const comboTier = streak < 3 ? 0 : streak < 6 ? 1 : 2;
+        const COMBO_LABELS = ['', ' ×1.5', ' ×2'];
+        return xpParticles.map((p) => (
+          <motion.div
+            key={p.id}
+            initial={{ opacity: 1, y: 0, x: p.x }}
+            animate={{ opacity: 0, y: -60, x: p.x + (Math.random() * 20 - 10) }}
+            transition={{ duration: 0.85, ease: 'easeOut' }}
+            className={`pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 z-20 text-sm font-black drop-shadow-[0_0_8px_rgba(34,211,238,0.8)] ${
+              comboTier > 0 ? 'text-amber-300' : isBoss ? 'text-red-300' : 'text-cyan-300'
+            }`}
+            aria-hidden="true"
+          >
+            +10{COMBO_LABELS[comboTier]} XP
+          </motion.div>
+        ));
+      })()}
 
       {/* ── Boss HP bar ──────────────────────────────────────────────────────── */}
       {isBoss && (
@@ -704,10 +788,10 @@ export function QuizInterface({
       <div className="space-y-2">
         <div className="flex justify-between text-xs text-gray-500">
           <span>Question {currentIndex + 1} of {questions.length}</span>
-          <span className={`font-mono tabular-nums transition-colors ${
-            timeProgress >= 0.83 ? 'text-red-400' : timeProgress >= 0.5 ? 'text-yellow-400' : 'text-gray-400'
+          <span className={`font-mono tabular-nums transition-colors font-bold ${
+            timeProgress >= 0.83 ? 'text-red-400' : timeProgress >= 0.5 ? 'text-yellow-400' : 'text-gray-500'
           }`}>
-            {(timeElapsed / 1000).toFixed(1)}s
+            {Math.max(0, Math.ceil((MAX_QUESTION_TIME - timeElapsed) / 1000))}s
           </span>
         </div>
         <div
@@ -786,6 +870,33 @@ export function QuizInterface({
               🛡 Shield
             </motion.span>
           )}
+          {streakFreezeActive && !streakFrozen && (
+            <motion.span
+              animate={{ opacity: [0.6, 1, 0.6] }}
+              transition={{ repeat: Infinity, duration: 1.2 }}
+              className="ml-1 text-xs font-mono text-cyan-400"
+            >
+              📡 PKT SNF
+            </motion.span>
+          )}
+          {streakFrozen && (
+            <motion.span
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="ml-1 text-xs font-mono text-cyan-300 uppercase tracking-wider"
+            >
+              📡 STREAK SAVED!
+            </motion.span>
+          )}
+          {hearts === 1 && !gameOver && (
+            <motion.span
+              animate={{ opacity: [0.7, 1, 0.7] }}
+              transition={{ repeat: Infinity, duration: 0.7 }}
+              className="ml-2 text-xs font-mono font-black text-red-400 uppercase tracking-widest"
+            >
+              ⚡ CLUTCH
+            </motion.span>
+          )}
         </div>
 
         {/* Sound toggle */}
@@ -820,15 +931,54 @@ export function QuizInterface({
         </div>
       )}
 
-      {/* ── Streak + EXP bar + mascot ─────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <StreakCounter streak={streak} />
-        <ExpBar totalExp={currentExp} level={currentLevel} className="flex-1 min-w-48" />
-        <QuizMascot mood={mascotMood} size={36} />
-      </div>
+      {/* ── Streak + combo badge + EXP bar + mascot ─────────────────────────── */}
+      {(() => {
+        const comboTier = streak < 3 ? 0 : streak < 6 ? 1 : 2;
+        const COMBO_LABELS = ['', '1.5×', '2×'];
+        return (
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <StreakCounter streak={streak} />
+              <AnimatePresence>
+                {comboTier > 0 && (
+                  <motion.div
+                    key={comboTier}
+                    initial={{ scale: 0.4, opacity: 0, y: -8 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0.4, opacity: 0 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 18 }}
+                    className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-lg border ${
+                      comboTier === 2
+                        ? 'border-orange-400/60 bg-orange-500/15 text-orange-300 shadow-[0_0_8px_rgba(251,146,60,0.3)]'
+                        : 'border-amber-500/50 bg-amber-500/10 text-amber-300'
+                    }`}
+                  >
+                    COMBO {COMBO_LABELS[comboTier]}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            <ExpBar totalExp={currentExp} level={currentLevel} className="flex-1 min-w-48" />
+            <PixelMascot mood={pixelMood} pixelSize={3} />
+          </div>
+        );
+      })()}
 
       {/* ── Question card ─────────────────────────────────────────────────────── */}
       <AnimatePresence mode="wait">
+        {(() => {
+          const comboTier = streak < 3 ? 0 : streak < 6 ? 1 : 2;
+          const isClutch = hearts === 1 && !gameOver;
+          const cardBorder = isClutch
+            ? 'border-red-500/50 bg-gray-900/90 shadow-[0_0_20px_rgba(239,68,68,0.12)]'
+            : comboTier === 2
+            ? 'border-orange-400/45 bg-gray-900/85 shadow-[0_0_18px_rgba(251,146,60,0.1)]'
+            : comboTier === 1
+            ? 'border-amber-500/30 bg-gray-900/82'
+            : isBoss
+            ? 'border-red-500/20 bg-gray-900/85'
+            : 'border-white/10 bg-gray-900/80';
+          return (
         <motion.div
           key={currentQ.question_id}
           initial={{ opacity: 0, x: 20 }}
@@ -840,11 +990,7 @@ export function QuizInterface({
           exit={{ opacity: 0, x: -20 }}
           transition={shakeCard ? { duration: 0.4, ease: 'easeOut' } : { duration: 0.25 }}
           onAnimationComplete={() => { if (shakeCard) setShakeCard(false); }}
-          className={`rounded-2xl border backdrop-blur-sm p-6 ${
-            isBoss
-              ? 'border-red-500/20 bg-gray-900/85'
-              : 'border-white/10 bg-gray-900/80'
-          }`}
+          className={`rounded-2xl border backdrop-blur-sm p-6 transition-colors duration-500 ${cardBorder}`}
         >
           {/* Difficulty badge + boss label */}
           <div className="flex items-center justify-between mb-4">
@@ -916,7 +1062,7 @@ export function QuizInterface({
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <QuizMascot mood={selectedOption === feedbackCorrectKey ? 'correct' : 'wrong'} size={40} />
+                  <PixelMascot mood={selectedOption === feedbackCorrectKey ? 'correct' : 'wrong'} pixelSize={3} />
                   <p className="text-sm font-semibold">
                     {selectedOption === feedbackCorrectKey ? (
                       <span className="text-green-400">
@@ -983,6 +1129,8 @@ export function QuizInterface({
             </motion.div>
           )}
         </motion.div>
+          );
+        })()}
       </AnimatePresence>
 
       {/* ── Power-up bar ─────────────────────────────────────────────────────── */}
@@ -1011,11 +1159,13 @@ export function QuizInterface({
               if (!cfg) return null;
               const used50 = pu.powerup_type === 'fifty_fifty' && eliminatedOptions.length > 0;
               const usedShield = pu.powerup_type === 'shield' && shieldActive;
-              const unavailable = phase !== 'answering' && pu.powerup_type !== 'shield';
-              const disabled = pu.quantity <= 0 || used50 || usedShield || unavailable;
+              const usedFreeze = pu.powerup_type === 'packet_sniffer' && streakFreezeActive;
+              const unavailable = phase !== 'answering' && pu.powerup_type !== 'shield' && pu.powerup_type !== 'packet_sniffer';
+              const disabled = pu.quantity <= 0 || used50 || usedShield || usedFreeze || unavailable;
               const handler =
-                pu.powerup_type === 'fifty_fifty' ? handleFiftyFifty :
-                pu.powerup_type === 'shield'       ? handleShield :
+                pu.powerup_type === 'fifty_fifty'    ? handleFiftyFifty :
+                pu.powerup_type === 'shield'          ? handleShield :
+                pu.powerup_type === 'packet_sniffer' ? handleStreakFreeze :
                 handleSkip;
 
               return (
@@ -1029,7 +1179,7 @@ export function QuizInterface({
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all duration-150 ${
                     disabled
                       ? 'border-white/5 bg-gray-900/20 text-gray-700 cursor-not-allowed'
-                      : usedShield
+                      : usedShield || usedFreeze
                       ? 'border-blue-500/50 bg-blue-500/15 text-blue-300 cursor-default'
                       : 'border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 hover:border-purple-400/50 cursor-pointer'
                   }`}
@@ -1050,6 +1200,14 @@ export function QuizInterface({
 
       {/* Accent color used for TS — keeps `accentColor` from being unused */}
       <span className="sr-only" aria-hidden="true">{accentColor}</span>
+
+      {/* ── Level-up burst overlay ───────────────────────────────────────────── */}
+      <LevelUpBurst
+        show={showLevelUp}
+        newLevel={levelUpInfo?.level ?? 1}
+        newRank={levelUpInfo?.rank ?? ''}
+        onComplete={() => setShowLevelUp(false)}
+      />
     </div>
   );
 }

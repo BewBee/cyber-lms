@@ -7,7 +7,9 @@ import { useEffect, useRef } from 'react';
  * Renders behind quiz content as a fixed, low-opacity background.
  * Uses requestAnimationFrame; pauses when tab is not visible.
  */
-export function TerminalRain() {
+interface TerminalRainProps { className?: string; }
+
+export function TerminalRain({ className }: TerminalRainProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -70,7 +72,7 @@ export function TerminalRain() {
     <canvas
       ref={canvasRef}
       aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-0 opacity-60"
+      className={`pointer-events-none fixed inset-0 z-0 mix-blend-screen ${className ?? ''}`}
     />
   );
 }

@@ -400,6 +400,9 @@ export default function ModulePage() {
           }`}>
             {isBossMission ? '⚠ BOSS ENCOUNTER DETECTED' : '▸ Awaiting Deployment'}
           </p>
+          {!isBossMission && mod.module_type === 'core' && (
+            <p className="text-[10px] font-mono text-green-700 mb-3 tracking-wider">// OPEN ACCESS — no class enrollment required</p>
+          )}
           <h2 className="text-lg font-bold text-white mb-2">
             {mod.question_count === 0
               ? 'No intel loaded yet'

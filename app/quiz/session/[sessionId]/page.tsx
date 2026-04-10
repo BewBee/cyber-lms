@@ -16,6 +16,7 @@ import { Footer } from '@/components/ui/Footer';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { QuizInterface } from '@/components/game/QuizInterface';
 import { TerminalRain } from '@/components/game/TerminalRain';
+import { startSoundtrack, stopSoundtrack } from '@/lib/soundtrack';
 import type { User } from '@/types';
 
 // Read ?boss=true from URL without triggering Suspense boundary issues
@@ -32,7 +33,12 @@ export default function QuizSessionPage() {
   const [loading, setLoading] = useState(true);
   const [isBoss, setIsBoss] = useState(false);
 
-  useEffect(() => { setIsBoss(readBossParam()); }, []);
+  useEffect(() => {
+    const boss = readBossParam();
+    setIsBoss(boss);
+    startSoundtrack(boss ? 'boss' : 'quiz');
+    return () => { stopSoundtrack(1.5); };
+  }, []);
 
   useEffect(() => {
     async function resolveUser() {
